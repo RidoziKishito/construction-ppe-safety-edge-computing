@@ -1,0 +1,31 @@
+# Python
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# IDE
+.idea/
+.vscode/
+
+# Model weights & exports
+*.pt
+*.onnx
+
+# Dataset (large, stored on Modal Volume — NOT committed)
+ai-model/data/
+merged-ppe/
+
+# Training outputs / downloaded results
+local_runs/
+runs/
+
+# Debug artifacts
+parse_model.txt
+
+ai-model/docs/
