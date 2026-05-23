@@ -1,0 +1,16 @@
+{
+  "zones": [
+    {
+      "id": "Z01",
+      "name": "Danger Zone (Hố sâu)",
+      "type": "danger_zone",
+      "polygon": [[50, 50], [300, 50], [300, 300], [50, 300]]
+    },
+    {
+      "id": "Z02",
+      "name": "Warning Zone (Khu máy móc)",
+      "type": "warning_zone",
+      "polygon": [[350, 50], [600, 50], [600, 300], [350, 300]]
+    }
+  ]
+}
