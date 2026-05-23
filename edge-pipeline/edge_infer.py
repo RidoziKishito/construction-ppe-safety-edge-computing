@@ -6,14 +6,14 @@ import numpy as np
 from ultralytics import YOLO
 from logger import EdgeLogger
 import rule_engine
-import display  # IMPORT MỚI ĐỂ VẼ GIAO DIỆN
+import display  # NEW IMPORT TO DRAW UI
 
 
-# --- BỘ LỌC CHỐNG NHIỄU (TEMPORAL SMOOTHER) ---
+# --- TEMPORAL NOISE FILTER (TEMPORAL SMOOTHER) ---
 class TemporalSmoother:
     def __init__(self, required_frames=5):
         self.required_frames = required_frames
-        # Lưu trạng thái của từng Zone: {"Z01": {"level": "CRITICAL", "count": 3}}
+        # Store state for each Zone: {"Z01": {"level": "CRITICAL", "count": 3}}
         self.zones_status = {}
 
     def process_alerts(self, current_frame_alerts):
@@ -27,15 +27,15 @@ class TemporalSmoother:
 
             current_level = current_frame_alerts.get(z_id, {"level": "NORMAL"})["level"]
 
-            # Nếu mức cảnh báo giống frame trước, tăng bộ đếm
+            # If the alert level matches previous frame, increment counter
             if current_level == self.zones_status[z_id]["level"]:
                 self.zones_status[z_id]["count"] += 1
             else:
-                # Nếu thay đổi trạng thái, reset bộ đếm về 1
+                # If level changed, reset counter to 1
                 self.zones_status[z_id]["level"] = current_level
                 self.zones_status[z_id]["count"] = 1
 
-            # Đạt đủ N frames liên tục mới cho phép ghi log
+            # Only log when level has been stable for required number of frames
             if self.zones_status[z_id]["level"] in ["WARNING", "CRITICAL"]:
                 if self.zones_status[z_id]["count"] >= self.required_frames:
                     valid_logs.append(current_frame_alerts[z_id]["log_data"])
@@ -51,7 +51,7 @@ def load_zones(zones_path):
         with open(zones_path, "r", encoding="utf-8") as f:
             return json.load(f)
     except FileNotFoundError:
-        print("Cảnh báo: Không tìm thấy zones.json, sẽ chạy không có zone.")
+        print("Warning: zones.json not found, running without zones.")
         return {"zones": []}
 
 
@@ -72,7 +72,7 @@ def run_pipeline(
     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
 
     safety_logger = EdgeLogger()
-    # Khởi tạo bộ lọc với số frame truyền từ tham số dòng lệnh
+    # Initialize smoother with number of frames from CLI argument
     smoother = TemporalSmoother(required_frames=smooth_frames)
     frame_id = 0
 
@@ -87,7 +87,7 @@ def run_pipeline(
 
         frame_id += 1
 
-        # 1. Gọi hàm vẽ Zone từ file display.py (Thay thế cho 1 đống code cũ)
+        # 1. Call draw_zones from display.py (replaces older code)
         display.draw_zones(frame, zones_config)
 
         results = model(
@@ -130,7 +130,7 @@ def run_pipeline(
                 "level", "NORMAL"
             )
 
-            # Ưu tiên lấy cảnh báo nguy hiểm nhất nếu có nhiều người trong cùng 1 zone
+            # Prefer the most severe alert if multiple people are in the same zone
             if alert_level == "CRITICAL" or (
                 alert_level == "WARNING" and existing_level != "CRITICAL"
             ):
@@ -147,15 +147,15 @@ def run_pipeline(
                     },
                 }
 
-            # 2. GỌI HÀM VẼ NGƯỜI TỪ FILE DISPLAY.PY
+            # 2. CALL PERSON DRAWING FUNCTION FROM display.py
             display.draw_person_alert(
                 frame, p["box"], center_point, alert_level, ppe_violations
             )
 
-        # 3. Đẩy trạng thái của toàn bộ frame qua bộ lọc rồi mới ghi log
+        # 3. Push whole-frame state through smoother and then log
         valid_logs = smoother.process_alerts(current_frame_alerts)
         for log_data in valid_logs:
-            # TRUYỀN FRAME HIỆN TẠI VÀO ĐỂ CHỤP ẢNH (Ảnh sẽ chứa đầy đủ hộp và vùng)
+            # PASS CURRENT FRAME FOR SNAPSHOT (image will contain boxes and zones)
             log_data["frame_img"] = frame
             safety_logger.log_violation(**log_data)
 
@@ -181,9 +181,11 @@ if __name__ == "__main__":
     parser.add_argument("--iou", type=float, default=0.45)
     parser.add_argument("--class-names", type=str, default="configs/ppe_classes.txt")
     parser.add_argument("--zones", type=str, default="configs/zones.json")
-    # Tham số: Số lượng frame liên tiếp cần để xác nhận cảnh báo
     parser.add_argument(
-        "--smooth", type=int, default=5, help="Số frame liên tiếp để kích hoạt log"
+        "--smooth",
+        type=int,
+        default=5,
+        help="Number of consecutive frames required to activate logging",
     )
 
     args = parser.parse_args()

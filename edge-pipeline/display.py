@@ -3,7 +3,7 @@ import numpy as np
 
 
 def draw_zones(frame, zones_config):
-    """Vẽ các vùng an toàn/nguy hiểm lên màn hình"""
+    """Draw safety / danger zones on the frame"""
     for zone in zones_config.get("zones", []):
         pts = np.array(zone["polygon"], np.int32).reshape((-1, 1, 2))
         color = (0, 0, 255) if zone["type"] == "danger_zone" else (0, 255, 255)
@@ -20,23 +20,23 @@ def draw_zones(frame, zones_config):
 
 
 def draw_person_alert(frame, box, center_point, alert_level, ppe_violations):
-    """Vẽ bounding box của người, chấm tâm chân và text cảnh báo"""
+    """Draw person's bounding box, foot center dot and alert text"""
     x1, y1, x2, y2 = box
 
-    # Chọn màu vẽ theo Alert Level
-    color = (0, 255, 0)  # Xanh lá cho NORMAL
+    # Choose drawing color based on alert level
+    color = (0, 255, 0)  # Green for NORMAL
     if alert_level == "WARNING":
-        color = (0, 165, 255)  # Cam
+        color = (0, 165, 255)  # Orange
     elif alert_level == "CRITICAL":
-        color = (0, 0, 255)  # Đỏ
+        color = (0, 0, 255)  # Red
 
-    # Vẽ Box người
+    # Draw person box
     cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
 
-    # Vẽ tâm chân (chấm tròn nhỏ)
+    # Draw foot center (small filled circle)
     cv2.circle(frame, center_point, 5, color, -1)
 
-    # Hiển thị text cảnh báo
+    # Display alert text
     label = f"{alert_level} | PPE Miss: {len(ppe_violations)}"
     cv2.putText(
         frame,
