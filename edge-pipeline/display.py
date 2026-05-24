@@ -47,3 +47,21 @@ def draw_person_alert(frame, box, center_point, alert_level, ppe_violations):
         color,
         2,
     )
+
+
+def draw_other_detections(frame, other_detections):
+    """Draw other PPE detections (helmet, vest, etc.) for debugging"""
+    for det in other_detections:
+        x1, y1, x2, y2 = det["box"]
+        label = f"{det['class_name']} {det['conf']}"
+        # Draw light blue box for debug detections
+        cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 255, 0), 2)
+        cv2.putText(
+            frame,
+            label,
+            (x1, max(y1 - 5, 0)),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.5,
+            (255, 255, 0),
+            2,
+        )

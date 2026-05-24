@@ -6,14 +6,12 @@ import numpy as np
 from ultralytics import YOLO
 from logger import EdgeLogger
 import rule_engine
-import display  # NEW IMPORT TO DRAW UI
+import display
 
 
-# --- TEMPORAL NOISE FILTER (TEMPORAL SMOOTHER) ---
 class TemporalSmoother:
     def __init__(self, required_frames=5):
         self.required_frames = required_frames
-        # Store state for each Zone: {"Z01": {"level": "CRITICAL", "count": 3}}
         self.zones_status = {}
 
     def process_alerts(self, current_frame_alerts):
@@ -27,23 +25,17 @@ class TemporalSmoother:
 
             current_level = current_frame_alerts.get(z_id, {"level": "NORMAL"})["level"]
 
-            # If the alert level matches previous frame, increment counter
             if current_level == self.zones_status[z_id]["level"]:
                 self.zones_status[z_id]["count"] += 1
             else:
-                # If level changed, reset counter to 1
                 self.zones_status[z_id]["level"] = current_level
                 self.zones_status[z_id]["count"] = 1
 
-            # Only log when level has been stable for required number of frames
             if self.zones_status[z_id]["level"] in ["WARNING", "CRITICAL"]:
                 if self.zones_status[z_id]["count"] >= self.required_frames:
                     valid_logs.append(current_frame_alerts[z_id]["log_data"])
 
         return valid_logs
-
-
-# ---------------------------------------------
 
 
 def load_zones(zones_path):
@@ -72,7 +64,6 @@ def run_pipeline(
     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
 
     safety_logger = EdgeLogger()
-    # Initialize smoother with number of frames from CLI argument
     smoother = TemporalSmoother(required_frames=smooth_frames)
     frame_id = 0
 
@@ -86,12 +77,10 @@ def run_pipeline(
             break
 
         frame_id += 1
-
-        # 1. Call draw_zones from display.py (replaces older code)
         display.draw_zones(frame, zones_config)
 
         results = model(
-            frame, stream=True, verbose=False, conf=conf_thres, iou=iou_thres
+            frame, stream=True, verbose=True, conf=conf_thres, iou=iou_thres
         )
 
         persons = []
@@ -115,6 +104,7 @@ def run_pipeline(
 
         current_frame_alerts = {}
 
+        # 1. EVALUATE DETECTED PERSONS
         for p in persons:
             x1, y1, x2, y2 = p["box"]
             center_point = ((x1 + x2) // 2, y2)
@@ -130,7 +120,6 @@ def run_pipeline(
                 "level", "NORMAL"
             )
 
-            # Prefer the most severe alert if multiple people are in the same zone
             if alert_level == "CRITICAL" or (
                 alert_level == "WARNING" and existing_level != "CRITICAL"
             ):
@@ -147,20 +136,88 @@ def run_pipeline(
                     },
                 }
 
-            # 2. CALL PERSON DRAWING FUNCTION FROM display.py
             display.draw_person_alert(
                 frame, p["box"], center_point, alert_level, ppe_violations
             )
 
-        # 3. Push whole-frame state through smoother and then log
+        # 2. EVALUATE ALL STANDALONE DETECTIONS (Because Model is missing 'Person')
+        violation_classes = [
+            "no_helmet",
+            "no_goggle",
+            "no_gloves",
+            "no_boots",
+            "no_vest",
+            "none",
+        ]
+        debug_draw_only = []
+
+        for det in other_detections:
+            vx_center = (det["box"][0] + det["box"][2]) // 2
+            vy_center = (det["box"][1] + det["box"][3]) // 2
+            is_inside_person = False
+
+            for p in persons:
+                px1, py1, px2, py2 = p["box"]
+                if px1 <= vx_center <= px2 and py1 <= vy_center <= py2:
+                    is_inside_person = True
+                    break
+
+            if not is_inside_person:
+                # Dùng chính vật thể này (helmet, no_helmet) làm mỏ neo để check Zone
+                center_point = (vx_center, det["box"][3])
+                active_zones = rule_engine.get_person_zones(center_point, zones_config)
+
+                cls_name_lower = det["class_name"].lower()
+                ppe_violations = (
+                    [det["class_name"]] if cls_name_lower in violation_classes else []
+                )
+
+                # Mang mỏ neo này đi hỏi Rule Engine
+                alert_level = rule_engine.classify_alert(active_zones, ppe_violations)
+
+                if alert_level != "NORMAL":
+                    zone_str = (
+                        "|".join([z["id"] for z in active_zones])
+                        if active_zones
+                        else "NO_ZONE"
+                    )
+                    existing_level = current_frame_alerts.get(zone_str, {}).get(
+                        "level", "NORMAL"
+                    )
+
+                    if alert_level == "CRITICAL" or (
+                        alert_level == "WARNING" and existing_level != "CRITICAL"
+                    ):
+                        current_frame_alerts[zone_str] = {
+                            "level": alert_level,
+                            "log_data": {
+                                "camera_id": str(source),
+                                "frame_id": frame_id,
+                                "active_zones": active_zones,
+                                "alert_level": alert_level,
+                                "violations": ppe_violations,
+                                "conf": det["conf"],
+                                "bbox": det["box"],
+                            },
+                        }
+                    # Nếu có Alert (Warning/Critical) thì vẽ khung báo động
+                    display.draw_person_alert(
+                        frame, det["box"], center_point, alert_level, ppe_violations
+                    )
+                else:
+                    # Nếu NORMAL (ví dụ đội nón đứng ngoài Zone), thì chỉ vẽ khung xanh lơ
+                    debug_draw_only.append(det)
+
+        # 3. DRAW NORMAL PPEs FOR DEBUGGING
+        display.draw_other_detections(frame, debug_draw_only)
+
+        # 4. FILTER ALERTS & LOG
         valid_logs = smoother.process_alerts(current_frame_alerts)
         for log_data in valid_logs:
-            # PASS CURRENT FRAME FOR SNAPSHOT (image will contain boxes and zones)
             log_data["frame_img"] = frame
             safety_logger.log_violation(**log_data)
 
         cv2.imshow(window_name, frame)
-
         if cv2.waitKey(1) & 0xFF == ord("q"):
             break
         try:
@@ -175,18 +232,13 @@ def run_pipeline(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", type=str, default="yolo11n.onnx")
+    parser.add_argument("--model", type=str, default="best.onnx")
     parser.add_argument("--source", type=str, default="0")
     parser.add_argument("--conf", type=float, default=0.25)
     parser.add_argument("--iou", type=float, default=0.45)
     parser.add_argument("--class-names", type=str, default="configs/ppe_classes.txt")
     parser.add_argument("--zones", type=str, default="configs/zones.json")
-    parser.add_argument(
-        "--smooth",
-        type=int,
-        default=5,
-        help="Number of consecutive frames required to activate logging",
-    )
+    parser.add_argument("--smooth", type=int, default=5, help="Smooth frames")
 
     args = parser.parse_args()
     run_pipeline(

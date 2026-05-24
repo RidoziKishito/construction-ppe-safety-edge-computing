@@ -2,15 +2,15 @@
   "zones": [
     {
       "id": "Z01",
-      "name": "Danger Zone (Pit)",
+      "name": "Danger Zone (Lifting Area)",
       "type": "danger_zone",
-      "polygon": [[50, 50], [300, 50], [300, 300], [50, 300]]
+      "polygon": [[100, 450], [650, 450], [650, 1000], [100, 1000]]
     },
     {
       "id": "Z02",
-      "name": "Warning Zone (Machinery Area)",
+      "name": "Warning Zone (Scaffolding)",
       "type": "warning_zone",
-      "polygon": [[350, 50], [600, 50], [600, 300], [350, 300]]
+      "polygon": [[700, 450], [1800, 450], [1800, 1000], [700, 1000]]
     }
   ]
 }
