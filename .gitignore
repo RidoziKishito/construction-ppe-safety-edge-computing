@@ -29,3 +29,11 @@ runs/
 parse_model.txt
 
 ai-model/docs/
+AGENTS.md
+ai-model/outputs/baseline_*
+ai-model/outputs/cbam_*
+ai-model/outputs/ghost_*
+ai-model/*.onnx
+ai-model/*.pt
+ai-model/AGENTS.md
+ai-model/edge_optimization_plan.md
