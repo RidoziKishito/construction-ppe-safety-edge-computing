@@ -17,18 +17,18 @@
 <section class="analytics-grid">
   <div class="panel chart-panel">
     <div class="section-header"><h2>Violations by Hour</h2></div>
-    <canvas id="hourChart"></canvas>
+    <div class="chart-wrap"><canvas id="hourChart"></canvas></div>
   </div>
   <div class="panel chart-panel">
     <div class="section-header"><h2>Violations by PPE Type</h2></div>
-    <canvas id="ppeChart"></canvas>
+    <div class="chart-wrap"><canvas id="ppeChart"></canvas></div>
   </div>
   <div class="panel chart-panel wide">
-    <div class="section-header"><h2>Alert Level Distribution</h2></div>
-    <canvas id="levelChart"></canvas>
+    <div class="section-header"><h2>Alert Level Distribution — Last 7 Days</h2></div>
+    <div class="chart-wrap chart-wrap--wide"><canvas id="levelChart"></canvas></div>
   </div>
   <div class="panel wide">
-    <div class="section-header"><h2>Zone Heatmap</h2></div>
+    <div class="section-header"><h2>Zone Violation Heatmap</h2></div>
     <div class="table-wrap">
       <table class="data-table" id="heatmap-table">
         <thead>
