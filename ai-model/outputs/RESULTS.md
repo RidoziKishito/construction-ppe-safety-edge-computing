@@ -14,7 +14,7 @@ This file summarises all AI and edge optimisation experiments conducted for the 
 
 | Rank | Experiment | mAP@0.5 | Violation mAP@0.5 | Infer (ms/img) | Deploy recommendation |
 |------|------------|---------|-------------------|----------------|-----------------------|
-| 1 | **baseline_yolo26n** | 0.677 | 0.580 | **2.93** | ✅ Edge deploy — fastest top-tier violation model |
+| 1 | **baseline_yolo26n** | 0.677 | 0.580 | **2.93** |  Edge deploy — fastest top-tier violation model |
 | 2 | baseline_violation_oversample | **0.690** | **0.586** | 3.18 | Paper/report — best absolute mAP, slightly slower |
 | 3 | baseline_violation_aug | 0.670 | 0.557 | 2.95 | Not recommended — augmentation underperforms |
 | 4 | ghost_violation_oversample | 0.629 | 0.556 | 3.21 | Ablation only |

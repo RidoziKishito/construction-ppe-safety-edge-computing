@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+
+{% block title %}Live Monitor | Trinity{% endblock %}
+
+{% block content %}
+<header class="page-header monitor-header">
+  <div>
+    <p class="eyebrow">Live Monitor</p>
+    <h1>Trinity - Construction Safety Monitor</h1>
+  </div>
+  <div class="top-metrics" aria-label="Live dashboard summary">
+    <div>
+      <span class="metric-label">Current time</span>
+      <strong id="current-time">--:--:--</strong>
+    </div>
+    <div>
+      <span class="metric-label">Alerts today</span>
+      <strong id="alerts-today">0</strong>
+    </div>
+    <div>
+      <span class="metric-label">Critical</span>
+      <strong id="critical-today">0</strong>
+    </div>
+  </div>
+</header>
+
+<section class="monitor-grid">
+  <div class="panel live-panel">
+    <div class="section-header">
+      <h2>Site Feed</h2>
+      <span id="feed-state" class="state-label">Waiting for frame</span>
+    </div>
+    <div class="video-surface" id="video-surface">
+      <img id="live-frame" class="live-frame hidden" alt="Latest safety alert frame">
+      <div id="frame-fallback" class="frame-fallback">
+        <span>No frame available</span>
+        <small>Alert snapshots appear here when the edge logger writes image files.</small>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="section-header">
+      <h2>Recent Alerts</h2>
+      <span class="state-label">Last 10 events</span>
+    </div>
+    <div class="alert-feed" id="alert-feed"></div>
+  </div>
+</section>
+
+<div class="modal-backdrop hidden" id="snapshot-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+  <div class="modal-panel">
+    <div class="modal-header">
+      <div>
+        <h2 id="modal-title">Alert Snapshot</h2>
+        <p id="modal-meta"></p>
+      </div>
+      <button class="text-button" type="button" id="modal-close">Close</button>
+    </div>
+    <div class="modal-body">
+      <img id="modal-image" class="modal-image hidden" alt="Selected alert snapshot">
+      <div id="modal-fallback" class="frame-fallback">No frame available for this event.</div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const alertFeed = document.getElementById("alert-feed");
+const currentTime = document.getElementById("current-time");
+const alertsToday = document.getElementById("alerts-today");
+const criticalToday = document.getElementById("critical-today");
+const liveFrame = document.getElementById("live-frame");
+const frameFallback = document.getElementById("frame-fallback");
+const feedState = document.getElementById("feed-state");
+const modal = document.getElementById("snapshot-modal");
+const modalImage = document.getElementById("modal-image");
+const modalFallback = document.getElementById("modal-fallback");
+const modalMeta = document.getElementById("modal-meta");
+
+function formatTime(value) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+}
+
+function badge(level) {
+  return `<span class="badge badge-${level.toLowerCase()}">${level}</span>`;
+}
+
+function ppeTags(items) {
+  if (!items || items.length === 0) return '<span class="muted">None recorded</span>';
+  return items.map(item => `<span class="tag">${item.replace("no_", "no ")}</span>`).join("");
+}
+
+function openSnapshot(event) {
+  modal.classList.remove("hidden");
+  modalMeta.textContent = `${formatTime(event.timestamp)} | ${event.camera_id} | ${event.zone}`;
+  if (event.snapshot_url) {
+    modalImage.src = event.snapshot_url;
+    modalImage.classList.remove("hidden");
+    modalFallback.classList.add("hidden");
+  } else {
+    modalImage.removeAttribute("src");
+    modalImage.classList.add("hidden");
+    modalFallback.classList.remove("hidden");
+  }
+}
+
+async function refreshAlerts() {
+  const response = await fetch("/api/events?limit=10");
+  const payload = await response.json();
+  alertFeed.innerHTML = "";
+  payload.events.forEach(event => {
+    const row = document.createElement("button");
+    row.className = "alert-row";
+    row.type = "button";
+    row.innerHTML = `
+      <span class="alert-time">${formatTime(event.timestamp)}</span>
+      <span>${event.camera_id}</span>
+      <span>${event.zone}</span>
+      <span>${badge(event.alert_level)}</span>
+      <span class="tag-list">${ppeTags(event.missing_ppe)}</span>
+    `;
+    row.addEventListener("click", () => openSnapshot(event));
+    alertFeed.appendChild(row);
+  });
+}
+
+async function refreshStats() {
+  const response = await fetch("/api/stats");
+  const stats = await response.json();
+  alertsToday.textContent = stats.total_alerts_today;
+  criticalToday.textContent = stats.critical_today;
+}
+
+async function refreshFrame() {
+  const response = await fetch("/api/stats");
+  const stats = await response.json();
+  if (stats.latest_frame_url) {
+    liveFrame.src = `${stats.latest_frame_url}&t=${Date.now()}`;
+    liveFrame.classList.remove("hidden");
+    frameFallback.classList.add("hidden");
+    feedState.textContent = "Latest alert frame";
+  } else {
+    liveFrame.classList.add("hidden");
+    frameFallback.classList.remove("hidden");
+    feedState.textContent = "No frame file";
+  }
+}
+
+function tickClock() {
+  currentTime.textContent = new Date().toLocaleTimeString();
+}
+
+document.getElementById("modal-close").addEventListener("click", () => modal.classList.add("hidden"));
+modal.addEventListener("click", event => {
+  if (event.target === modal) modal.classList.add("hidden");
+});
+
+tickClock();
+refreshAlerts();
+refreshStats();
+refreshFrame();
+setInterval(tickClock, 1000);
+setInterval(refreshFrame, 2000);
+setInterval(() => {
+  refreshAlerts();
+  refreshStats();
+}, 3000);
+</script>
+{% endblock %}
