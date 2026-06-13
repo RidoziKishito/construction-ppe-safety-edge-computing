@@ -42,7 +42,7 @@ CONFIG = {
     / "outputs"
     / "edge_results"
     / "event_vs_frame_metrics.csv",
-    "conf_threshold": 0.25,
+    "conf_threshold": 0.4,
     "iou_threshold": 0.45,
     "smoothing_frames": [3, 5, 10],
 }
@@ -67,21 +67,23 @@ def print_environment() -> None:
     print(f"  numpy: {version_of('numpy')}")
     print(f"  pandas: {version_of('pandas')}")
     print(f"  ultralytics: {version_of('ultralytics')}")
-    print(f"  onnxruntime: {version_of('onnxruntime')}")
-    try:
-        import onnxruntime as ort
 
-        providers = ort.get_available_providers()
-        gpu_note = "GPU provider available" if any("CUDA" in p for p in providers) else "CPU only"
-        print(f"  ONNXRuntime providers: {providers} ({gpu_note})")
-    except Exception as exc:
-        print(f"  ONNXRuntime providers: unavailable ({exc})")
     try:
         import torch
-
         print(f"  torch CUDA available: {torch.cuda.is_available()}")
-    except Exception:
-        print("  torch CUDA available: unknown")
+    except Exception as exc:
+        print(f"  torch CUDA available: unknown ({exc})")
+
+    try:
+        import onnxruntime as ort
+        providers = ort.get_available_providers()
+        gpu_note = "GPU provider available" if any("CUDA" in p for p in providers) else "CPU only"
+        print(f"  onnxruntime: {ort.__version__}")
+        print(f"  ONNXRuntime providers: {providers} ({gpu_note})")
+    except Exception as exc:
+        print(f"  onnxruntime: unavailable")
+        print(f"  ONNXRuntime providers: unavailable ({exc})")
+
     print()
 
 
@@ -281,7 +283,7 @@ def process_video(video_path: Path, model, zones_config, rule_engine, cv2_module
             verbose=False,
             conf=CONFIG["conf_threshold"],
             iou=CONFIG["iou_threshold"],
-            device="cpu",
+            device="cuda:0",
         )
         persons, other_detections = detections_from_results(results, model)
         zone_alerts = frame_alerts_from_detections(
