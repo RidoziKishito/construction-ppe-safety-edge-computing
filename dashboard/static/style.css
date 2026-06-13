@@ -184,6 +184,22 @@ small {
   grid-column: 1 / -1;
 }
 
+/* ── Chart.js fix: canvas MUST have an explicit-height parent ── */
+.chart-panel {
+  /* no min-height here — let chart-wrap control the space */
+}
+
+.chart-wrap {
+  position: relative;
+  height: 280px;   /* fixed height — Chart.js reads this */
+  width: 100%;
+}
+
+.chart-wrap--wide {
+  height: 220px;   /* full-width chart can be a bit shorter */
+}
+/* ────────────────────────────────────────────────────────────── */
+
 .video-surface {
   position: relative;
   min-height: 520px;
@@ -285,14 +301,6 @@ small {
   color: var(--slate);
   padding: 3px 8px;
   font-size: 12px;
-}
-
-.chart-panel {
-  min-height: 340px;
-}
-
-.chart-panel canvas {
-  min-height: 270px;
 }
 
 .table-wrap {
@@ -573,5 +581,13 @@ small {
   .video-surface,
   .modal-body {
     min-height: 320px;
+  }
+
+  .chart-wrap {
+    height: 220px;
+  }
+
+  .chart-wrap--wide {
+    height: 180px;
   }
 }
