@@ -1,0 +1,6 @@
+{
+  "experiment": "baseline_yolo26n",
+  "weights": "/kaggle/working/ppe_yolo_experiments/runs/baseline_yolo26n/weights/best.pt",
+  "imgsz": 640,
+  "format": "onnx"
+}

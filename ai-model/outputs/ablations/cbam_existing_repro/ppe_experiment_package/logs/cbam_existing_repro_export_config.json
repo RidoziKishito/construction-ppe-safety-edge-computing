@@ -1,0 +1,6 @@
+{
+  "experiment": "cbam_existing_repro",
+  "weights": "/kaggle/working/ppe_yolo_experiments/runs/cbam_existing_repro/weights/best.pt",
+  "imgsz": 640,
+  "format": "onnx"
+}

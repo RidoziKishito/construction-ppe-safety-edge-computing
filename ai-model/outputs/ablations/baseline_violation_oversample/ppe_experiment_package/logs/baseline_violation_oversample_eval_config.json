@@ -1,0 +1,7 @@
+{
+  "experiment": "baseline_violation_oversample",
+  "weights": "/kaggle/working/ppe_yolo_experiments/runs/baseline_violation_oversample/weights/best.pt",
+  "data": "/kaggle/working/configs/data_baseline_violation_oversample_eval.yaml",
+  "device": "0,1",
+  "imgsz": 640
+}

@@ -1,0 +1,6 @@
+{
+  "experiment": "ghost_violation_oversample",
+  "weights": "/kaggle/working/ppe_yolo_experiments/runs/ghost_violation_oversample/weights/best.pt",
+  "imgsz": 640,
+  "format": "onnx"
+}

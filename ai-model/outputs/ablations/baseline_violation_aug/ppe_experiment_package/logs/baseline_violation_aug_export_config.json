@@ -1,0 +1,6 @@
+{
+  "experiment": "baseline_violation_aug",
+  "weights": "/kaggle/working/ppe_yolo_experiments/runs/baseline_violation_aug/weights/best.pt",
+  "imgsz": 640,
+  "format": "onnx"
+}

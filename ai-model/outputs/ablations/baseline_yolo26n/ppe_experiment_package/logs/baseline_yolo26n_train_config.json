@@ -1,0 +1,27 @@
+{
+  "experiment": "baseline_yolo26n",
+  "target": "baseline",
+  "model": "yolo26n.pt",
+  "data": "/kaggle/working/configs/data_baseline_yolo26n.yaml",
+  "epochs": 50,
+  "imgsz": 640,
+  "batch": 64,
+  "device": "0,1",
+  "seed": 42,
+  "hparams": {
+    "optimizer": "AdamW",
+    "lr0": 0.001,
+    "lrf": 0.01,
+    "warmup_epochs": 5,
+    "cos_lr": true,
+    "label_smoothing": 0.1,
+    "mosaic": 1.0,
+    "mixup": 0.15,
+    "copy_paste": 0.1,
+    "degrees": 10.0,
+    "translate": 0.2,
+    "scale": 0.5,
+    "fliplr": 0.5
+  },
+  "fast_debug": false
+}
