@@ -1,1 +1,2 @@
-python edge_infer.py --model best.onnx --source demo_video.mp4 --conf 0.25 --iou 0.45 --class-names configs/ppe_classes.txt --smooth 5
+python check.py --source demo_video3.mp4
+python edge_infer.py --model baseline_yolo26n_best.onnx --source demo_video3.mp4 --conf 0.4 --smooth 5
