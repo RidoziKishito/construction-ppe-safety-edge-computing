@@ -5,34 +5,41 @@ from datetime import datetime
 
 
 class EdgeLogger:
-    def __init__(self, log_dir="logs", filename="violations.csv"):
+    def __init__(self, log_dir="logs", source_name="video"):
         self.log_dir = log_dir
         # Automatically create logs directory if it does not exist
         if not os.path.exists(self.log_dir):
             os.makedirs(self.log_dir)
 
-        # Log filename is date-prefixed for easier shift-based management
-        self.filepath = os.path.join(
-            self.log_dir, f"{datetime.now().strftime('%Y%m%d')}_{filename}"
-        )
+        # Log filename is date-prefixed and includes source name
+        date_str = datetime.now().strftime('%Y%m%d')
+        base_filename = f"{date_str}_violations_{source_name}"
+        
+        # Check for uniqueness and append _1, _2 if it exists
+        idx = 0
+        while True:
+            suffix = f"_{idx}" if idx > 0 else ""
+            self.filepath = os.path.join(self.log_dir, f"{base_filename}{suffix}.csv")
+            if not os.path.exists(self.filepath):
+                break
+            idx += 1
 
-        # Create CSV header if file does not yet exist
-        if not os.path.isfile(self.filepath):
-            with open(self.filepath, mode="w", newline="", encoding="utf-8") as f:
-                writer = csv.writer(f)
-                writer.writerow(
-                    [
-                        "timestamp",
-                        "camera_id",
-                        "frame_id",
-                        "zone_id",
-                        "alert_level",
-                        "violation_type",
-                        "confidence",
-                        "bbox",
-                        "snapshot_path",  # NEW COLUMN: path to saved snapshot
-                    ]
-                )
+        # Create CSV header
+        with open(self.filepath, mode="w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(
+                [
+                    "timestamp",
+                    "camera_id",
+                    "frame_id",
+                    "zone_id",
+                    "alert_level",
+                    "violation_type",
+                    "confidence",
+                    "bbox",
+                    "snapshot_path",
+                ]
+            )
 
     def log_violation(
         self,

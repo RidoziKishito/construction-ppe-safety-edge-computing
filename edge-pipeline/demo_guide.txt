@@ -1,0 +1,26 @@
+HƯỚNG DẪN FLOW DEMO TRINITY EDGE PIPELINE
+
+BƯỚC 1: XÁC ĐỊNH VÙNG NGUY HIỂM (ZONES)
+- Dùng lệnh sau để xuất frame từ video và mở công cụ cấu hình Zone:
+  python check.py --source demo_video3.mp4
+- (Thay 'demo_video3.mp4' bằng tên video bạn muốn demo).
+- Trên giao diện: 
+  + Bấm "Danger Zone" -> Click 2 điểm chéo nhau trên ảnh để tạo vùng Đỏ.
+  + Bấm "Warning Zone" -> Click 2 điểm chéo nhau để tạo vùng Vàng.
+  + Nhấn "OK" để lưu tự động vào file zones.json.
+
+BƯỚC 2: CHẠY PIPELINE (DEMO CHÍNH)
+- Chạy hệ thống với video đã cấu hình:
+  python edge_infer.py --model baseline_yolo26n_best.onnx --source demo_video3.mp4 --conf 0.4 --smooth 5
+- Trên video sẽ hiển thị các cảnh báo (NORMAL, WARNING, CRITICAL) dựa trên việc công nhân lọt vào Zone nào và có mặc đủ PPE hay không.
+- Bấm phím 'q' trên bàn phím hoặc nhấn tắt cửa sổ khi muốn kết thúc.
+- Hệ thống sẽ tự động lưu lại video kết quả có tên là 'demo_video3_output.mp4'.
+
+BƯỚC 3: KIỂM TRA BẰNG CHỨNG (LOGS & SNAPSHOTS)
+1. Trên Terminal: Chú ý các dòng log báo cáo chi tiết phát hiện từ YOLO.
+2. File CSV: 
+   - Vào thư mục 'logs/'.
+   - Mở file CSV (VD: 20260615_violations_demo_video3.csv) để xem danh sách vi phạm. Hệ thống sẽ tự tăng số đuôi (_1, _2) nếu bạn demo lặp lại cùng một video.
+3. Snapshots (Ảnh chụp lúc vi phạm):
+   - Vào thư mục 'logs/snapshots/'.
+   - Xem các ảnh bằng chứng được tự động chụp lại ngay tại khoảnh khắc xảy ra vi phạm (thiếu PPE, lọt vào Danger zone).

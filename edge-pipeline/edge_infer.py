@@ -60,10 +60,19 @@ def run_pipeline(
         print(f"Error: Could not open video source: {source}")
         return
 
+    # Lấy thông số video gốc
+    fps = cap.get(cv2.CAP_PROP_FPS) or 15
+    w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    out_path = str(source).replace(".mp4", "_output.mp4")
+    writer = cv2.VideoWriter(out_path, cv2.VideoWriter_fourcc(*"mp4v"), fps, (w, h))
+
     window_name = "Trinity Edge - Safety Pipeline"
     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
 
-    safety_logger = EdgeLogger()
+    import os
+    base_source_name = os.path.splitext(os.path.basename(str(source)))[0]
+    safety_logger = EdgeLogger(source_name=base_source_name)
     smoother = TemporalSmoother(required_frames=smooth_frames)
     frame_id = 0
 
@@ -217,6 +226,7 @@ def run_pipeline(
             log_data["frame_img"] = frame
             safety_logger.log_violation(**log_data)
 
+        writer.write(frame)
         cv2.imshow(window_name, frame)
         if cv2.waitKey(1) & 0xFF == ord("q"):
             break
@@ -227,6 +237,8 @@ def run_pipeline(
             break
 
     cap.release()
+    writer.release()
+    print(f"Output video saved to: {out_path}")
     cv2.destroyAllWindows()
 
 

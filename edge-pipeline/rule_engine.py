@@ -60,21 +60,19 @@ def classify_alert(active_zones, ppe_violations):
     is_warning_zone = any(z["type"] == "warning_zone" for z in active_zones)
     has_violation = len(ppe_violations) > 0
 
-    # Rule 1: Entering a Danger zone -> CRITICAL immediately (regardless of PPE)
-    if is_danger_zone:
+    # CRITICAL cases
+    if is_danger_zone and has_violation:
         return "CRITICAL"
-
-    # Rule 2: In Warning zone AND missing PPE -> CRITICAL
     if is_warning_zone and has_violation:
         return "CRITICAL"
 
-    # Rule 3: In Warning zone (but PPE OK) -> WARNING
+    # WARNING cases
+    if is_danger_zone and not has_violation:
+        return "WARNING"
     if is_warning_zone and not has_violation:
         return "WARNING"
-
-    # Rule 4: In safe area but missing PPE -> WARNING reminder
-    if not is_warning_zone and not is_danger_zone and has_violation:
+    if not is_danger_zone and not is_warning_zone and has_violation:
         return "WARNING"
 
-    # Otherwise normal
+    # NORMAL case
     return "NORMAL"
