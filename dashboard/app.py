@@ -166,17 +166,22 @@ def load_events() -> list[dict[str, Any]]:
 def resolve_snapshot_path(frame_path: str | None) -> Path | None:
     if not frame_path:
         return None
-    raw = Path(frame_path)
+    
+    # Normalize all backslashes to forward slashes before any path resolution
+    normalized = frame_path.replace("\\", "/")
+    raw = Path(normalized)
+    
     if raw.is_absolute():
         candidate = raw
     else:
-        text = frame_path.replace("\\", "/")
-        if text.startswith("edge-pipeline/"):
-            candidate = PROJECT_ROOT / text
-        elif text.startswith("logs/"):
-            candidate = EDGE_PIPELINE_DIR / text
+        if normalized.startswith("edge-pipeline/"):
+            candidate = PROJECT_ROOT / normalized
+        elif normalized.startswith("logs/"):
+            # Maps logs/snapshots/<filename> to EDGE_LOG_DIR / "snapshots" / <filename>
+            # we strip the "logs/" prefix (length 5) so it becomes snapshots/<filename>
+            candidate = EDGE_LOG_DIR / normalized[5:]
         else:
-            candidate = EDGE_LOG_DIR / text
+            candidate = EDGE_LOG_DIR / normalized
 
     try:
         resolved = candidate.resolve()

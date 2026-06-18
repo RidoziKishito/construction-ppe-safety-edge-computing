@@ -5,7 +5,7 @@
 {% block content %}
 <header class="page-header monitor-header">
   <div>
-    <p class="eyebrow">Live Monitor</p>
+    <p class="eyebrow">Live Monitor <span id="live-indicator" class="live-badge">Live</span></p>
     <h1>Trinity - Construction Safety Monitor</h1>
   </div>
   <div class="top-metrics" aria-label="Live dashboard summary">
@@ -16,6 +16,10 @@
     <div>
       <span class="metric-label">Alerts today</span>
       <strong id="alerts-today">0</strong>
+    </div>
+    <div>
+      <span class="metric-label">Warning</span>
+      <strong id="warning-today">0</strong>
     </div>
     <div>
       <span class="metric-label">Critical</span>
@@ -42,7 +46,7 @@
   <div class="panel">
     <div class="section-header">
       <h2>Recent Alerts</h2>
-      <span class="state-label">Last 10 events</span>
+      <span class="state-label">Last 20 events</span>
     </div>
     <div class="alert-feed" id="alert-feed"></div>
   </div>
@@ -70,6 +74,7 @@
 const alertFeed = document.getElementById("alert-feed");
 const currentTime = document.getElementById("current-time");
 const alertsToday = document.getElementById("alerts-today");
+const warningToday = document.getElementById("warning-today");
 const criticalToday = document.getElementById("critical-today");
 const liveFrame = document.getElementById("live-frame");
 const frameFallback = document.getElementById("frame-fallback");
@@ -107,45 +112,90 @@ function openSnapshot(event) {
   }
 }
 
-async function refreshAlerts() {
-  const response = await fetch("/api/events?limit=10");
-  const payload = await response.json();
-  alertFeed.innerHTML = "";
-  payload.events.forEach(event => {
-    const row = document.createElement("button");
-    row.className = "alert-row";
-    row.type = "button";
-    row.innerHTML = `
-      <span class="alert-time">${formatTime(event.timestamp)}</span>
-      <span>${event.camera_id}</span>
-      <span>${event.zone}</span>
-      <span>${badge(event.alert_level)}</span>
-      <span class="tag-list">${ppeTags(event.missing_ppe)}</span>
-    `;
-    row.addEventListener("click", () => openSnapshot(event));
-    alertFeed.appendChild(row);
-  });
+// Global set to keep track of displayed events by timestamp + camera_id
+const displayedEventKeys = new Set();
+
+async function pollAlerts() {
+  try {
+    const response = await fetch("/api/events?limit=20");
+    if (!response.ok) throw new Error("Network response was not ok");
+    const payload = await response.json();
+    
+    // Diff result against currently displayed list
+    const newEvents = [];
+    payload.events.forEach(event => {
+      const key = `${event.timestamp}_${event.camera_id}`;
+      if (!displayedEventKeys.has(key)) {
+        newEvents.push(event);
+      }
+    });
+
+    // Process from oldest to newest of the new events, prepending each
+    // so the newest ends up at the very top.
+    for (let i = newEvents.length - 1; i >= 0; i--) {
+      const event = newEvents[i];
+      const key = `${event.timestamp}_${event.camera_id}`;
+      displayedEventKeys.add(key);
+
+      const row = document.createElement("button");
+      row.className = "alert-row";
+      row.type = "button";
+      row.innerHTML = `
+        <span class="alert-time">${formatTime(event.timestamp)}</span>
+        <span>${event.camera_id}</span>
+        <span>${event.zone}</span>
+        <span>${badge(event.alert_level)}</span>
+        <span class="tag-list">${ppeTags(event.missing_ppe)}</span>
+      `;
+      row.addEventListener("click", () => openSnapshot(event));
+      alertFeed.prepend(row);
+    }
+  } catch (error) {
+    console.error("Error polling alerts:", error);
+  }
+}
+
+function updateMetricWithFlash(element, newValue) {
+  const oldValue = element.textContent;
+  if (oldValue !== String(newValue)) {
+    element.textContent = newValue;
+    // Remove flash class and trigger reflow to restart CSS keyframe animation
+    element.classList.remove("flash");
+    void element.offsetWidth; 
+    element.classList.add("flash");
+  }
 }
 
 async function refreshStats() {
-  const response = await fetch("/api/stats");
-  const stats = await response.json();
-  alertsToday.textContent = stats.total_alerts_today;
-  criticalToday.textContent = stats.critical_today;
+  try {
+    const response = await fetch("/api/stats");
+    if (!response.ok) throw new Error("Network response was not ok");
+    const stats = await response.json();
+    updateMetricWithFlash(alertsToday, stats.total_alerts_today);
+    updateMetricWithFlash(warningToday, stats.warning_today);
+    updateMetricWithFlash(criticalToday, stats.critical_today);
+  } catch (error) {
+    console.error("Error refreshing stats:", error);
+  }
 }
 
 async function refreshFrame() {
-  const response = await fetch("/api/stats");
-  const stats = await response.json();
-  if (stats.latest_frame_url) {
-    liveFrame.src = `${stats.latest_frame_url}&t=${Date.now()}`;
-    liveFrame.classList.remove("hidden");
-    frameFallback.classList.add("hidden");
-    feedState.textContent = "Latest alert frame";
-  } else {
-    liveFrame.classList.add("hidden");
-    frameFallback.classList.remove("hidden");
-    feedState.textContent = "No frame file";
+  try {
+    const response = await fetch("/api/stats");
+    if (!response.ok) throw new Error("Network response was not ok");
+    const stats = await response.json();
+    if (stats.latest_frame_url) {
+      liveFrame.src = `${stats.latest_frame_url}&t=${Date.now()}`;
+      liveFrame.classList.remove("hidden");
+      frameFallback.classList.add("hidden");
+      feedState.textContent = "Latest alert frame";
+    } else {
+      liveFrame.classList.add("hidden");
+      frameFallback.classList.remove("hidden");
+      feedState.textContent = "No frame file";
+    }
+  } catch (error) {
+    console.error("Error refreshing frame:", error);
   }
 }
 
@@ -159,13 +209,13 @@ modal.addEventListener("click", event => {
 });
 
 tickClock();
-refreshAlerts();
+pollAlerts();
 refreshStats();
 refreshFrame();
 setInterval(tickClock, 1000);
 setInterval(refreshFrame, 2000);
 setInterval(() => {
-  refreshAlerts();
+  pollAlerts();
   refreshStats();
 }, 3000);
 </script>

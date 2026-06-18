@@ -37,3 +37,4 @@ ai-model/*.onnx
 ai-model/*.pt
 ai-model/AGENTS.md
 ai-model/edge_optimization_plan.md
+logs/
