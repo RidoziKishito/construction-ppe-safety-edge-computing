@@ -368,7 +368,7 @@ Structured edge event logging versus raw video streaming:
 
 2. Run pipeline using an ONNX model and video file:
    ```bash
-   python edge-pipeline/edge_infer.py --model ai-model/best.onnx --source edge-pipeline/media/videos/input/demo_video3.mp4 --zones edge-pipeline/configs/zones/demo_video3.json --smooth 5
+   python edge-pipeline/edge_infer.py --model ai-model/best.onnx --source edge-pipeline/media/videos/input/demo_video3.mp4 --zones edge-pipeline/configs/zones/demo_video3.json --smooth 5 --inference-interval 3 --alert-cooldown 5
    ```
 
 Command-line Arguments:

@@ -143,6 +143,8 @@ def create_run(source, model, zone_profile, args):
         "confidence": args.conf,
         "iou": args.iou,
         "smoothing_frames": args.smooth,
+        "inference_interval": args.inference_interval,
+        "alert_cooldown_seconds": args.alert_cooldown,
     }
     write_json(run_dir / "run.json", metadata)
     write_json(
@@ -174,6 +176,10 @@ def run_pipeline(source, model, zone_profile, run_dir, args):
         str(run_dir / "output.mp4"),
         "--camera-id",
         args.camera_id or source.stem,
+        "--inference-interval",
+        str(args.inference_interval),
+        "--alert-cooldown",
+        str(args.alert_cooldown),
     ]
     if args.headless:
         command.append("--headless")
@@ -192,6 +198,8 @@ def main():
     parser.add_argument("--conf", type=float, default=0.4)
     parser.add_argument("--iou", type=float, default=0.45)
     parser.add_argument("--smooth", type=int, default=5)
+    parser.add_argument("--inference-interval", type=int, default=3)
+    parser.add_argument("--alert-cooldown", type=float, default=5.0)
     parser.add_argument("--headless", action="store_true")
     parser.add_argument("--max-frames", type=int)
     parser.add_argument("--configure-zones", action="store_true")

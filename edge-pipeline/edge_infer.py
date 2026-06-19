@@ -1,49 +1,32 @@
 import argparse
-import cv2
-import math
 import json
+import math
 import os
 from pathlib import Path
-import numpy as np
+
+import cv2
 from ultralytics import YOLO
-from logger import EdgeLogger
-import rule_engine
+
 import display
+import rule_engine
+from logger import EdgeLogger
+from pipeline_control import ALERT_SEVERITY, TemporalSmoother, should_run_inference
 
 
-class TemporalSmoother:
-    def __init__(self, required_frames=5):
-        self.required_frames = required_frames
-        self.zones_status = {}
-
-    def process_alerts(self, current_frame_alerts):
-        valid_logs = []
-        current_zones = current_frame_alerts.keys()
-        all_tracked_zones = set(self.zones_status.keys()).union(set(current_zones))
-
-        for z_id in all_tracked_zones:
-            if z_id not in self.zones_status:
-                self.zones_status[z_id] = {"level": "NORMAL", "count": 0}
-
-            current_level = current_frame_alerts.get(z_id, {"level": "NORMAL"})["level"]
-
-            if current_level == self.zones_status[z_id]["level"]:
-                self.zones_status[z_id]["count"] += 1
-            else:
-                self.zones_status[z_id]["level"] = current_level
-                self.zones_status[z_id]["count"] = 1
-
-            if self.zones_status[z_id]["level"] in ["WARNING", "CRITICAL"]:
-                if self.zones_status[z_id]["count"] >= self.required_frames:
-                    valid_logs.append(current_frame_alerts[z_id]["log_data"])
-
-        return valid_logs
+VIOLATION_CLASSES = {
+    "no_helmet",
+    "no_goggle",
+    "no_gloves",
+    "no_boots",
+    "no_vest",
+    "none",
+}
 
 
 def load_zones(zones_path):
     try:
-        with open(zones_path, "r", encoding="utf-8") as f:
-            return json.load(f)
+        with open(zones_path, "r", encoding="utf-8") as handle:
+            return json.load(handle)
     except FileNotFoundError:
         print("Warning: zones.json not found, running without zones.")
         return {"zones": []}
@@ -61,6 +44,162 @@ def validate_zone_profile(zones_config, width, height):
             )
 
 
+def infer_detections(model, frame, conf_thres, iou_thres):
+    persons = []
+    other_detections = []
+    results = model(
+        frame,
+        stream=True,
+        verbose=False,
+        conf=conf_thres,
+        iou=iou_thres,
+    )
+
+    for result in results:
+        for box in result.boxes:
+            x1, y1, x2, y2 = map(int, box.xyxy[0])
+            confidence = math.ceil(float(box.conf[0]) * 100) / 100
+            class_name = model.names[int(box.cls[0])]
+            detection = {
+                "box": (x1, y1, x2, y2),
+                "conf": confidence,
+                "class_name": class_name,
+            }
+            if class_name.lower() == "person":
+                persons.append(detection)
+            else:
+                other_detections.append(detection)
+
+    return persons, other_detections
+
+
+def keep_highest_alert(current_frame_alerts, zone_id, alert):
+    existing_level = current_frame_alerts.get(zone_id, {}).get("level", "NORMAL")
+    if ALERT_SEVERITY[alert["level"]] > ALERT_SEVERITY[existing_level]:
+        current_frame_alerts[zone_id] = alert
+
+
+def build_alert(
+    camera_id,
+    frame_id,
+    active_zones,
+    alert_level,
+    violations,
+    confidence,
+    box,
+):
+    return {
+        "level": alert_level,
+        "log_data": {
+            "camera_id": camera_id,
+            "frame_id": frame_id,
+            "active_zones": active_zones,
+            "alert_level": alert_level,
+            "violations": violations,
+            "conf": confidence,
+            "bbox": box,
+        },
+    }
+
+
+def evaluate_detections(
+    frame,
+    persons,
+    other_detections,
+    zones_config,
+    camera_id,
+    frame_id,
+):
+    current_frame_alerts = {}
+
+    for person in persons:
+        x1, _, x2, y2 = person["box"]
+        center_point = ((x1 + x2) // 2, y2)
+        active_zones = rule_engine.get_person_zones(center_point, zones_config)
+        violations = rule_engine.check_ppe_violation(
+            person["box"], other_detections
+        )
+        alert_level = rule_engine.classify_alert(active_zones, violations)
+        zone_id = (
+            "|".join(zone["id"] for zone in active_zones)
+            if active_zones
+            else "NO_ZONE"
+        )
+
+        if alert_level != "NORMAL":
+            keep_highest_alert(
+                current_frame_alerts,
+                zone_id,
+                build_alert(
+                    camera_id,
+                    frame_id,
+                    active_zones,
+                    alert_level,
+                    violations,
+                    person["conf"],
+                    person["box"],
+                ),
+            )
+        display.draw_person_alert(
+            frame,
+            person["box"],
+            center_point,
+            alert_level,
+            violations,
+        )
+
+    debug_draw_only = []
+    for detection in other_detections:
+        x1, _, x2, y2 = detection["box"]
+        center_point = ((x1 + x2) // 2, y2)
+        if any(
+            person["box"][0] <= center_point[0] <= person["box"][2]
+            and person["box"][1] <= center_point[1] <= person["box"][3]
+            for person in persons
+        ):
+            continue
+
+        active_zones = rule_engine.get_person_zones(center_point, zones_config)
+        class_name = detection["class_name"]
+        violations = (
+            [class_name] if class_name.lower() in VIOLATION_CLASSES else []
+        )
+        alert_level = rule_engine.classify_alert(active_zones, violations)
+
+        if alert_level == "NORMAL":
+            debug_draw_only.append(detection)
+            continue
+
+        zone_id = (
+            "|".join(zone["id"] for zone in active_zones)
+            if active_zones
+            else "NO_ZONE"
+        )
+        keep_highest_alert(
+            current_frame_alerts,
+            zone_id,
+            build_alert(
+                camera_id,
+                frame_id,
+                active_zones,
+                alert_level,
+                violations,
+                detection["conf"],
+                detection["box"],
+            ),
+        )
+        display.draw_person_alert(
+            frame,
+            detection["box"],
+            center_point,
+            alert_level,
+            violations,
+        )
+
+    display.draw_other_detections(frame, debug_draw_only)
+    return current_frame_alerts
+
+
 def run_pipeline(
     model_path,
     source,
@@ -74,190 +213,95 @@ def run_pipeline(
     headless=False,
     max_frames=None,
     camera_id=None,
+    inference_interval=1,
+    alert_cooldown=5.0,
 ):
+    del classes_path  # Kept for CLI compatibility.
     model = YOLO(model_path)
     zones_config = load_zones(zones_path)
 
     video_source = int(source) if source.isdigit() else source
     cap = cv2.VideoCapture(video_source)
-
     if not cap.isOpened():
         print(f"Error: Could not open video source: {source}")
-        return
+        return 1
 
-    # Lấy thông số video gốc
     fps = cap.get(cv2.CAP_PROP_FPS) or 15
-    w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    validate_zone_profile(zones_config, w, h)
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    validate_zone_profile(zones_config, width, height)
+
     out_path = output_path or str(Path(str(source)).with_suffix("")) + "_output.mp4"
     Path(out_path).parent.mkdir(parents=True, exist_ok=True)
-    writer = cv2.VideoWriter(out_path, cv2.VideoWriter_fourcc(*"mp4v"), fps, (w, h))
+    writer = cv2.VideoWriter(
+        out_path,
+        cv2.VideoWriter_fourcc(*"mp4v"),
+        fps,
+        (width, height),
+    )
 
     window_name = "Trinity Edge - Safety Pipeline"
     if not headless:
         cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
 
-    base_source_name = os.path.splitext(os.path.basename(str(source)))[0]
+    source_name = os.path.splitext(os.path.basename(str(source)))[0]
+    resolved_camera_id = camera_id or source_name
     safety_logger = EdgeLogger(
         log_dir=log_dir,
-        source_name=base_source_name,
+        source_name=source_name,
         filename="events.csv" if Path(log_dir).name != "logs" else None,
     )
-    smoother = TemporalSmoother(required_frames=smooth_frames)
+    smoother = TemporalSmoother(
+        required_frames=smooth_frames,
+        cooldown_seconds=alert_cooldown,
+    )
+    cached_persons = []
+    cached_other_detections = []
     frame_id = 0
 
     print(
-        f"Running video stream. Smoothing = {smooth_frames} frames. Press 'q' or 'X' to exit."
+        "Running video stream. "
+        f"Smoothing={smooth_frames}, inference interval={inference_interval}, "
+        f"alert cooldown={alert_cooldown}s. Press 'q' or 'X' to exit."
     )
 
     while True:
-        ret, frame = cap.read()
-        if not ret:
+        ok, frame = cap.read()
+        if not ok:
             break
 
         frame_id += 1
         if max_frames and frame_id > max_frames:
             break
-        display.draw_zones(frame, zones_config)
 
-        results = model(
-            frame, stream=True, verbose=True, conf=conf_thres, iou=iou_thres
+        inference_frame = should_run_inference(frame_id, inference_interval)
+        if inference_frame:
+            cached_persons, cached_other_detections = infer_detections(
+                model,
+                frame,
+                conf_thres,
+                iou_thres,
+            )
+
+        display.draw_zones(frame, zones_config)
+        current_frame_alerts = evaluate_detections(
+            frame,
+            cached_persons,
+            cached_other_detections,
+            zones_config,
+            resolved_camera_id,
+            frame_id,
         )
 
-        persons = []
-        other_detections = []
-
-        for r in results:
-            for box in r.boxes:
-                x1, y1, x2, y2 = map(int, box.xyxy[0])
-                conf = math.ceil((box.conf[0] * 100)) / 100
-                cls_name = model.names[int(box.cls[0])]
-
-                det_obj = {
-                    "box": (x1, y1, x2, y2),
-                    "conf": conf,
-                    "class_name": cls_name,
-                }
-                if cls_name.lower() == "person":
-                    persons.append(det_obj)
-                else:
-                    other_detections.append(det_obj)
-
-        current_frame_alerts = {}
-
-        # 1. EVALUATE DETECTED PERSONS
-        for p in persons:
-            x1, y1, x2, y2 = p["box"]
-            center_point = ((x1 + x2) // 2, y2)
-
-            active_zones = rule_engine.get_person_zones(center_point, zones_config)
-            ppe_violations = rule_engine.check_ppe_violation(p["box"], other_detections)
-            alert_level = rule_engine.classify_alert(active_zones, ppe_violations)
-
-            zone_str = (
-                "|".join([z["id"] for z in active_zones]) if active_zones else "NO_ZONE"
+        if inference_frame:
+            video_time_seconds = (frame_id - 1) / fps
+            valid_logs = smoother.process_alerts(
+                current_frame_alerts,
+                video_time_seconds,
             )
-            existing_level = current_frame_alerts.get(zone_str, {}).get(
-                "level", "NORMAL"
-            )
-
-            if alert_level == "CRITICAL" or (
-                alert_level == "WARNING" and existing_level != "CRITICAL"
-            ):
-                current_frame_alerts[zone_str] = {
-                    "level": alert_level,
-                    "log_data": {
-                        "camera_id": camera_id or base_source_name,
-                        "frame_id": frame_id,
-                        "active_zones": active_zones,
-                        "alert_level": alert_level,
-                        "violations": ppe_violations,
-                        "conf": p["conf"],
-                        "bbox": p["box"],
-                    },
-                }
-
-            display.draw_person_alert(
-                frame, p["box"], center_point, alert_level, ppe_violations
-            )
-
-        # 2. EVALUATE ALL STANDALONE DETECTIONS (Because Model is missing 'Person')
-        violation_classes = [
-            "no_helmet",
-            "no_goggle",
-            "no_gloves",
-            "no_boots",
-            "no_vest",
-            "none",
-        ]
-        debug_draw_only = []
-
-        for det in other_detections:
-            vx_center = (det["box"][0] + det["box"][2]) // 2
-            vy_center = (det["box"][1] + det["box"][3]) // 2
-            is_inside_person = False
-
-            for p in persons:
-                px1, py1, px2, py2 = p["box"]
-                if px1 <= vx_center <= px2 and py1 <= vy_center <= py2:
-                    is_inside_person = True
-                    break
-
-            if not is_inside_person:
-                # Dùng chính vật thể này (helmet, no_helmet) làm mỏ neo để check Zone
-                center_point = (vx_center, det["box"][3])
-                active_zones = rule_engine.get_person_zones(center_point, zones_config)
-
-                cls_name_lower = det["class_name"].lower()
-                ppe_violations = (
-                    [det["class_name"]] if cls_name_lower in violation_classes else []
-                )
-
-                # Mang mỏ neo này đi hỏi Rule Engine
-                alert_level = rule_engine.classify_alert(active_zones, ppe_violations)
-
-                if alert_level != "NORMAL":
-                    zone_str = (
-                        "|".join([z["id"] for z in active_zones])
-                        if active_zones
-                        else "NO_ZONE"
-                    )
-                    existing_level = current_frame_alerts.get(zone_str, {}).get(
-                        "level", "NORMAL"
-                    )
-
-                    if alert_level == "CRITICAL" or (
-                        alert_level == "WARNING" and existing_level != "CRITICAL"
-                    ):
-                        current_frame_alerts[zone_str] = {
-                            "level": alert_level,
-                            "log_data": {
-                                "camera_id": camera_id or base_source_name,
-                                "frame_id": frame_id,
-                                "active_zones": active_zones,
-                                "alert_level": alert_level,
-                                "violations": ppe_violations,
-                                "conf": det["conf"],
-                                "bbox": det["box"],
-                            },
-                        }
-                    # Nếu có Alert (Warning/Critical) thì vẽ khung báo động
-                    display.draw_person_alert(
-                        frame, det["box"], center_point, alert_level, ppe_violations
-                    )
-                else:
-                    # Nếu NORMAL (ví dụ đội nón đứng ngoài Zone), thì chỉ vẽ khung xanh lơ
-                    debug_draw_only.append(det)
-
-        # 3. DRAW NORMAL PPEs FOR DEBUGGING
-        display.draw_other_detections(frame, debug_draw_only)
-
-        # 4. FILTER ALERTS & LOG
-        valid_logs = smoother.process_alerts(current_frame_alerts)
-        for log_data in valid_logs:
-            log_data["frame_img"] = frame
-            safety_logger.log_violation(**log_data)
+            for log_data in valid_logs:
+                log_data["frame_img"] = frame
+                safety_logger.log_violation(**log_data)
 
         writer.write(frame)
         if not headless:
@@ -272,38 +316,45 @@ def run_pipeline(
 
     cap.release()
     writer.release()
-    print(f"Output video saved to: {out_path}")
     if not headless:
         cv2.destroyAllWindows()
+    print(f"Output video saved to: {out_path}")
+    return 0
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", type=str, default="best.onnx")
-    parser.add_argument("--source", type=str, default="0")
+    parser.add_argument("--model", default="best.onnx")
+    parser.add_argument("--source", default="0")
     parser.add_argument("--conf", type=float, default=0.25)
     parser.add_argument("--iou", type=float, default=0.45)
-    parser.add_argument("--class-names", type=str, default="configs/ppe_classes.txt")
-    parser.add_argument("--zones", type=str, default="configs/zones.json")
-    parser.add_argument("--smooth", type=int, default=5, help="Smooth frames")
+    parser.add_argument("--class-names", default="configs/ppe_classes.txt")
+    parser.add_argument("--zones", default="configs/zones.json")
+    parser.add_argument("--smooth", type=int, default=5)
     parser.add_argument("--log-dir", default="logs")
     parser.add_argument("--output")
     parser.add_argument("--headless", action="store_true")
     parser.add_argument("--max-frames", type=int)
     parser.add_argument("--camera-id")
-
+    parser.add_argument("--inference-interval", type=int, default=1)
+    parser.add_argument("--alert-cooldown", type=float, default=5.0)
     args = parser.parse_args()
-    run_pipeline(
-        args.model,
-        args.source,
-        args.conf,
-        args.iou,
-        args.class_names,
-        args.zones,
-        args.smooth,
-        args.log_dir,
-        args.output,
-        args.headless,
-        args.max_frames,
-        args.camera_id,
+
+    raise SystemExit(
+        run_pipeline(
+            args.model,
+            args.source,
+            args.conf,
+            args.iou,
+            args.class_names,
+            args.zones,
+            args.smooth,
+            args.log_dir,
+            args.output,
+            args.headless,
+            args.max_frames,
+            args.camera_id,
+            args.inference_interval,
+            args.alert_cooldown,
+        )
     )

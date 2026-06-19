@@ -49,6 +49,8 @@ class DemoWorkflowTests(unittest.TestCase):
             conf=0.4,
             iou=0.45,
             smooth=5,
+            inference_interval=3,
+            alert_cooldown=5.0,
             headless=True,
             max_frames=25,
         )
@@ -72,6 +74,10 @@ class DemoWorkflowTests(unittest.TestCase):
             self.assertIn("--log-dir", command)
             self.assertIn("--camera-id", command)
             self.assertIn("CAM-02", command)
+            self.assertIn("--inference-interval", command)
+            self.assertIn("3", command)
+            self.assertIn("--alert-cooldown", command)
+            self.assertIn("5.0", command)
 
     def test_created_run_becomes_dashboard_active_run(self):
         dashboard_module = importlib.import_module("dashboard.app")
@@ -108,6 +114,8 @@ class DemoWorkflowTests(unittest.TestCase):
                     conf=0.4,
                     iou=0.45,
                     smooth=5,
+                    inference_interval=3,
+                    alert_cooldown=5.0,
                 )
                 run_dir, metadata = demo.create_run(source, model, zones, args)
 
