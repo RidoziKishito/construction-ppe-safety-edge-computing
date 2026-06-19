@@ -1,37 +1,76 @@
-import cv2
 import argparse
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
 
-def main():
-    parser = argparse.ArgumentParser(description="Trích xuất frame đầu tiên của video để lấy độ phân giải.")
-    parser.add_argument("--source", type=str, required=True, help="Đường dẫn đến file video")
+import cv2
+
+
+def extract_first_frame(source: Path, output_path: Path) -> tuple[int, int]:
+    cap = cv2.VideoCapture(str(source))
+    if not cap.isOpened():
+        raise RuntimeError(f"Could not open video: {source}")
+
+    try:
+        ok, frame = cap.read()
+        if not ok:
+            raise RuntimeError(f"Could not read the first frame from: {source}")
+        height, width = frame.shape[:2]
+        if not cv2.imwrite(str(output_path), frame):
+            raise RuntimeError(f"Could not write preview frame: {output_path}")
+        return width, height
+    finally:
+        cap.release()
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        description="Extract a preview frame and create a zone profile for a video."
+    )
+    parser.add_argument("--source", required=True, help="Video file path")
+    parser.add_argument(
+        "--output",
+        help="Zone profile path (default: configs/zones/<video-name>.json)",
+    )
     args = parser.parse_args()
 
-    cap = cv2.VideoCapture(args.source)
-    if not cap.isOpened():
-        print(f"Lỗi: Không thể mở video: {args.source}")
-        return
+    source = Path(args.source).expanduser().resolve()
+    if not source.is_file():
+        parser.error(f"Video file does not exist: {source}")
 
-    ret, frame = cap.read()
-    if not ret:
-        print("Lỗi: Không thể đọc frame đầu tiên từ video.")
-        cap.release()
-        return
+    output = (
+        Path(args.output).expanduser().resolve()
+        if args.output
+        else Path("configs/zones").resolve() / f"{source.stem}.json"
+    )
+    output.parent.mkdir(parents=True, exist_ok=True)
 
-    print("Resolution:", frame.shape[1], "x", frame.shape[0])  
-    
-    import os
-    base_name = os.path.splitext(os.path.basename(args.source))[0]
-    out_filename = f"frame_check_{base_name}.jpg"
-    
-    cv2.imwrite(out_filename, frame)
-    print(f"Đã lưu frame đầu tiên thành '{out_filename}'")
-    
-    cap.release()
-    
-    # Mở giao diện Zone Editor
-    import subprocess
-    print("Đang mở công cụ chọn Zone...")
-    subprocess.run(["python", "zone_editor.py", out_filename])
+    preview_path = Path(tempfile.gettempdir()) / f"trinity_zone_preview_{source.stem}.jpg"
+    try:
+        width, height = extract_first_frame(source, preview_path)
+        print(f"Video resolution: {width}x{height}")
+        print(f"Opening zone editor for: {source.name}")
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(Path(__file__).with_name("zone_editor.py")),
+                str(preview_path),
+                "--output",
+                str(output),
+                "--source",
+                source.name,
+                "--width",
+                str(width),
+                "--height",
+                str(height),
+            ],
+            check=False,
+        )
+        return result.returncode
+    finally:
+        preview_path.unlink(missing_ok=True)
+
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

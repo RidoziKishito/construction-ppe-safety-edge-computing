@@ -5,24 +5,26 @@ from datetime import datetime
 
 
 class EdgeLogger:
-    def __init__(self, log_dir="logs", source_name="video"):
+    def __init__(self, log_dir="logs", source_name="video", filename=None):
         self.log_dir = log_dir
         # Automatically create logs directory if it does not exist
         if not os.path.exists(self.log_dir):
             os.makedirs(self.log_dir)
 
-        # Log filename is date-prefixed and includes source name
-        date_str = datetime.now().strftime('%Y%m%d')
-        base_filename = f"{date_str}_violations_{source_name}"
-        
-        # Check for uniqueness and append _1, _2 if it exists
-        idx = 0
-        while True:
-            suffix = f"_{idx}" if idx > 0 else ""
-            self.filepath = os.path.join(self.log_dir, f"{base_filename}{suffix}.csv")
-            if not os.path.exists(self.filepath):
-                break
-            idx += 1
+        if filename:
+            self.filepath = os.path.join(self.log_dir, filename)
+        else:
+            date_str = datetime.now().strftime("%Y%m%d")
+            base_filename = f"{date_str}_violations_{source_name}"
+            idx = 0
+            while True:
+                suffix = f"_{idx}" if idx > 0 else ""
+                self.filepath = os.path.join(
+                    self.log_dir, f"{base_filename}{suffix}.csv"
+                )
+                if not os.path.exists(self.filepath):
+                    break
+                idx += 1
 
         # Create CSV header
         with open(self.filepath, mode="w", newline="", encoding="utf-8") as f:

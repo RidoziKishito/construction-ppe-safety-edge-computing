@@ -20,6 +20,8 @@ BASE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = BASE_DIR.parent
 EDGE_PIPELINE_DIR = PROJECT_ROOT / "edge-pipeline"
 EDGE_LOG_DIR = EDGE_PIPELINE_DIR / "logs"
+RUNS_DIR = EDGE_LOG_DIR / "runs"
+ACTIVE_RUN_PATH = EDGE_LOG_DIR / "active_run.json"
 SAMPLE_EVENTS_PATH = BASE_DIR / "data" / "sample_events.json"
 
 ZONE_NAMES = {
@@ -153,7 +155,43 @@ def load_csv_events(path: Path) -> list[dict[str, Any]]:
     return events
 
 
+def active_run() -> tuple[Path | None, dict[str, Any] | None]:
+    try:
+        pointer = json.loads(ACTIVE_RUN_PATH.read_text(encoding="utf-8"))
+        run_dir = Path(pointer["run_dir"]).resolve()
+        allowed_root = RUNS_DIR.resolve()
+        if allowed_root not in run_dir.parents or not run_dir.is_dir():
+            return None, None
+        metadata_path = run_dir / "run.json"
+        metadata = (
+            json.loads(metadata_path.read_text(encoding="utf-8"))
+            if metadata_path.is_file()
+            else pointer
+        )
+        return run_dir, metadata
+    except (FileNotFoundError, KeyError, json.JSONDecodeError, OSError):
+        return None, None
+
+
+def load_run_events(run_dir: Path) -> list[dict[str, Any]]:
+    events = []
+    for path in sorted(run_dir.glob("*.json")):
+        if path.name != "run.json":
+            events.extend(load_json_events(path, path.name))
+    for path in sorted(run_dir.glob("*.csv")):
+        events.extend(load_csv_events(path))
+    return events
+
+
 def load_events() -> list[dict[str, Any]]:
+    run_dir, _ = active_run()
+    if run_dir:
+        return sorted(
+            load_run_events(run_dir),
+            key=lambda item: item["timestamp"],
+            reverse=True,
+        )
+
     events = load_json_events(SAMPLE_EVENTS_PATH, "sample_events.json")
     if EDGE_LOG_DIR.exists():
         for path in sorted(EDGE_LOG_DIR.glob("*.json")):
@@ -259,6 +297,17 @@ def api_stats():
             "critical_today": sum(1 for event in todays_events if event["alert_level"] == "CRITICAL"),
             "latest_frame_url": latest_frame_url,
             "generated_at": datetime.now().replace(microsecond=0).isoformat(),
+        }
+    )
+
+
+@app.route("/api/run")
+def api_run():
+    run_dir, metadata = active_run()
+    return jsonify(
+        {
+            "active": run_dir is not None,
+            "run": metadata,
         }
     )
 

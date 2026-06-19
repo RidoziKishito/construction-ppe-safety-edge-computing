@@ -1,2 +1,10 @@
-python check.py --source demo_video3.mp4
-python edge_infer.py --model baseline_yolo26n_best.onnx --source demo_video3.mp4 --conf 0.4 --smooth 5
+python ..\demo.py --source demo_video3.mp4
+
+# Force zone editing:
+python ..\demo.py --source demo_video3.mp4 --configure-zones
+
+# Fast headless test after zones have been configured:
+python ..\demo.py --source demo_video3.mp4 --headless --max-frames 300
+
+# Add new videos to:
+# media\videos\input\

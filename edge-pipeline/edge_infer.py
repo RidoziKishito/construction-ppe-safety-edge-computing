@@ -2,6 +2,8 @@ import argparse
 import cv2
 import math
 import json
+import os
+from pathlib import Path
 import numpy as np
 from ultralytics import YOLO
 from logger import EdgeLogger
@@ -47,8 +49,31 @@ def load_zones(zones_path):
         return {"zones": []}
 
 
+def validate_zone_profile(zones_config, width, height):
+    profile_width = zones_config.get("width")
+    profile_height = zones_config.get("height")
+    if profile_width and profile_height:
+        if int(profile_width) != width or int(profile_height) != height:
+            raise ValueError(
+                "Zone profile resolution "
+                f"{profile_width}x{profile_height} does not match video "
+                f"resolution {width}x{height}."
+            )
+
+
 def run_pipeline(
-    model_path, source, conf_thres, iou_thres, classes_path, zones_path, smooth_frames
+    model_path,
+    source,
+    conf_thres,
+    iou_thres,
+    classes_path,
+    zones_path,
+    smooth_frames,
+    log_dir="logs",
+    output_path=None,
+    headless=False,
+    max_frames=None,
+    camera_id=None,
 ):
     model = YOLO(model_path)
     zones_config = load_zones(zones_path)
@@ -64,15 +89,21 @@ def run_pipeline(
     fps = cap.get(cv2.CAP_PROP_FPS) or 15
     w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    out_path = str(source).replace(".mp4", "_output.mp4")
+    validate_zone_profile(zones_config, w, h)
+    out_path = output_path or str(Path(str(source)).with_suffix("")) + "_output.mp4"
+    Path(out_path).parent.mkdir(parents=True, exist_ok=True)
     writer = cv2.VideoWriter(out_path, cv2.VideoWriter_fourcc(*"mp4v"), fps, (w, h))
 
     window_name = "Trinity Edge - Safety Pipeline"
-    cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+    if not headless:
+        cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
 
-    import os
     base_source_name = os.path.splitext(os.path.basename(str(source)))[0]
-    safety_logger = EdgeLogger(source_name=base_source_name)
+    safety_logger = EdgeLogger(
+        log_dir=log_dir,
+        source_name=base_source_name,
+        filename="events.csv" if Path(log_dir).name != "logs" else None,
+    )
     smoother = TemporalSmoother(required_frames=smooth_frames)
     frame_id = 0
 
@@ -86,6 +117,8 @@ def run_pipeline(
             break
 
         frame_id += 1
+        if max_frames and frame_id > max_frames:
+            break
         display.draw_zones(frame, zones_config)
 
         results = model(
@@ -135,7 +168,7 @@ def run_pipeline(
                 current_frame_alerts[zone_str] = {
                     "level": alert_level,
                     "log_data": {
-                        "camera_id": str(source),
+                        "camera_id": camera_id or base_source_name,
                         "frame_id": frame_id,
                         "active_zones": active_zones,
                         "alert_level": alert_level,
@@ -200,7 +233,7 @@ def run_pipeline(
                         current_frame_alerts[zone_str] = {
                             "level": alert_level,
                             "log_data": {
-                                "camera_id": str(source),
+                                "camera_id": camera_id or base_source_name,
                                 "frame_id": frame_id,
                                 "active_zones": active_zones,
                                 "alert_level": alert_level,
@@ -227,19 +260,21 @@ def run_pipeline(
             safety_logger.log_violation(**log_data)
 
         writer.write(frame)
-        cv2.imshow(window_name, frame)
-        if cv2.waitKey(1) & 0xFF == ord("q"):
-            break
-        try:
-            if cv2.getWindowProperty(window_name, cv2.WND_PROP_AUTOSIZE) == -1:
+        if not headless:
+            cv2.imshow(window_name, frame)
+            if cv2.waitKey(1) & 0xFF == ord("q"):
                 break
-        except cv2.error:
-            break
+            try:
+                if cv2.getWindowProperty(window_name, cv2.WND_PROP_AUTOSIZE) == -1:
+                    break
+            except cv2.error:
+                break
 
     cap.release()
     writer.release()
     print(f"Output video saved to: {out_path}")
-    cv2.destroyAllWindows()
+    if not headless:
+        cv2.destroyAllWindows()
 
 
 if __name__ == "__main__":
@@ -251,6 +286,11 @@ if __name__ == "__main__":
     parser.add_argument("--class-names", type=str, default="configs/ppe_classes.txt")
     parser.add_argument("--zones", type=str, default="configs/zones.json")
     parser.add_argument("--smooth", type=int, default=5, help="Smooth frames")
+    parser.add_argument("--log-dir", default="logs")
+    parser.add_argument("--output")
+    parser.add_argument("--headless", action="store_true")
+    parser.add_argument("--max-frames", type=int)
+    parser.add_argument("--camera-id")
 
     args = parser.parse_args()
     run_pipeline(
@@ -261,4 +301,9 @@ if __name__ == "__main__":
         args.class_names,
         args.zones,
         args.smooth,
+        args.log_dir,
+        args.output,
+        args.headless,
+        args.max_frames,
+        args.camera_id,
     )

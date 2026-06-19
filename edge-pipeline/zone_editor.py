@@ -1,175 +1,213 @@
-import sys
+import argparse
 import json
+from pathlib import Path
 import tkinter as tk
 from tkinter import messagebox
+
 from PIL import Image, ImageTk
 
+
 class ZoneEditor:
-    def __init__(self, root, image_path):
+    def __init__(
+        self,
+        root,
+        image_path,
+        output_path,
+        source_name=None,
+        source_width=None,
+        source_height=None,
+    ):
         self.root = root
         self.root.title("Trinity Zone Editor")
-        
-        self.image_path = image_path
-        self.orig_img = Image.open(image_path)
-        
-        max_w, max_h = 1000, 650
-        self.scale_factor = 1.0
-        
-        if self.orig_img.width > max_w or self.orig_img.height > max_h:
-            scale_w = max_w / self.orig_img.width
-            scale_h = max_h / self.orig_img.height
-            self.scale_factor = min(scale_w, scale_h)
-            new_w = int(self.orig_img.width * self.scale_factor)
-            new_h = int(self.orig_img.height * self.scale_factor)
-            try:
-                resample_filter = Image.Resampling.LANCZOS
-            except AttributeError:
-                resample_filter = Image.ANTIALIAS
-            self.display_img = self.orig_img.resize((new_w, new_h), resample_filter)
-        else:
-            self.display_img = self.orig_img.copy()
+        self.output_path = Path(output_path)
+        self.source_name = source_name
+        self.source_width = source_width
+        self.source_height = source_height
 
-        self.tk_img = ImageTk.PhotoImage(self.display_img)
-        
-        # UI Layout
-        self.canvas_frame = tk.Frame(root)
-        self.canvas_frame.pack(side=tk.LEFT, padx=10, pady=10)
-        
-        self.canvas = tk.Canvas(self.canvas_frame, width=self.display_img.width, height=self.display_img.height, cursor="cross")
-        self.canvas.pack()
-        self.canvas.create_image(0, 0, anchor=tk.NW, image=self.tk_img)
-        
-        self.btn_frame = tk.Frame(root)
-        self.btn_frame.pack(side=tk.RIGHT, fill=tk.Y, padx=10, pady=10)
-        
-        self.lbl_status = tk.Label(self.btn_frame, text="Vui lòng chọn Zone\nđể bắt đầu vẽ.", fg="blue")
-        self.lbl_status.pack(pady=10)
-        
-        self.btn_danger = tk.Button(self.btn_frame, text="Danger Zone", bg="red", fg="white", width=15, command=self.set_mode_danger)
-        self.btn_danger.pack(pady=5)
-        
-        self.btn_warning = tk.Button(self.btn_frame, text="Warning Zone", bg="gold", fg="black", width=15, command=self.set_mode_warning)
-        self.btn_warning.pack(pady=5)
-        
-        self.btn_ok = tk.Button(self.btn_frame, text="OK", bg="green", fg="white", width=15, command=self.save_and_exit)
-        self.btn_ok.pack(side=tk.BOTTOM, pady=20)
-        
-        self.canvas.bind("<Button-1>", self.on_click)
-        
-        # State
+        self.original_image = Image.open(image_path)
+        self.display_image, self.scale_factor = self._fit_image(self.original_image)
+        self.tk_image = ImageTk.PhotoImage(self.display_image)
+
         self.current_mode = None
+        self.first_point = None
+        self.temp_marker = None
         self.points = {"danger": [], "warning": []}
-        self.rects = {"danger": None, "warning": None}
-        self.colors = {"danger": "red", "warning": "yellow"}
-        self.temp_point = None
+        self.rectangles = {"danger": None, "warning": None}
+        self.colors = {"danger": "red", "warning": "gold"}
 
-    def set_mode_danger(self):
-        self.current_mode = "danger"
-        self.temp_point = None
-        self.points["danger"] = []
-        if self.rects["danger"]:
-            self.canvas.delete(self.rects["danger"])
-            self.rects["danger"] = None
-        self.lbl_status.config(text="Đang vẽ: Danger Zone\nClick 2 điểm chéo nhau", fg="red")
+        self._build_ui()
 
-    def set_mode_warning(self):
-        self.current_mode = "warning"
-        self.temp_point = None
-        self.points["warning"] = []
-        if self.rects["warning"]:
-            self.canvas.delete(self.rects["warning"])
-            self.rects["warning"] = None
-        self.lbl_status.config(text="Đang vẽ: Warning Zone\nClick 2 điểm chéo nhau", fg="orange")
+    @staticmethod
+    def _fit_image(image):
+        max_width, max_height = 1000, 650
+        scale = min(max_width / image.width, max_height / image.height, 1.0)
+        if scale == 1.0:
+            return image.copy(), scale
+        size = (int(image.width * scale), int(image.height * scale))
+        return image.resize(size, Image.Resampling.LANCZOS), scale
+
+    def _build_ui(self):
+        canvas_frame = tk.Frame(self.root)
+        canvas_frame.pack(side=tk.LEFT, padx=10, pady=10)
+
+        self.canvas = tk.Canvas(
+            canvas_frame,
+            width=self.display_image.width,
+            height=self.display_image.height,
+            cursor="cross",
+        )
+        self.canvas.pack()
+        self.canvas.create_image(0, 0, anchor=tk.NW, image=self.tk_image)
+        self.canvas.bind("<Button-1>", self.on_click)
+
+        controls = tk.Frame(self.root)
+        controls.pack(side=tk.RIGHT, fill=tk.Y, padx=10, pady=10)
+
+        self.status = tk.Label(
+            controls,
+            text="Select a zone type, then click two opposite corners.",
+            fg="navy",
+            wraplength=180,
+        )
+        self.status.pack(pady=10)
+
+        tk.Button(
+            controls,
+            text="Danger Zone",
+            bg="red",
+            fg="white",
+            width=16,
+            command=lambda: self.set_mode("danger"),
+        ).pack(pady=5)
+        tk.Button(
+            controls,
+            text="Warning Zone",
+            bg="gold",
+            fg="black",
+            width=16,
+            command=lambda: self.set_mode("warning"),
+        ).pack(pady=5)
+        tk.Button(
+            controls,
+            text="Save",
+            bg="green",
+            fg="white",
+            width=16,
+            command=self.save_and_exit,
+        ).pack(side=tk.BOTTOM, pady=20)
+
+    def set_mode(self, mode):
+        self.current_mode = mode
+        self.first_point = None
+        self.points[mode] = []
+        if self.rectangles[mode]:
+            self.canvas.delete(self.rectangles[mode])
+            self.rectangles[mode] = None
+        self.status.config(
+            text=f"Drawing {mode} zone: click two opposite corners.",
+            fg=self.colors[mode],
+        )
 
     def on_click(self, event):
         if not self.current_mode:
-            messagebox.showwarning("Cảnh báo", "Hãy click vào nút 'Danger Zone' hoặc 'Warning Zone' trước khi vẽ.")
+            messagebox.showwarning("Select zone", "Select a zone type before drawing.")
             return
-            
-        x, y = event.x, event.y
-        if not self.temp_point:
-            self.temp_point = (x, y)
-            # Draw a temporary small circle
-            self.temp_id = self.canvas.create_oval(x-3, y-3, x+3, y+3, fill=self.colors[self.current_mode])
-        else:
-            x1, y1 = self.temp_point
-            x2, y2 = x, y
-            self.canvas.delete(self.temp_id)
-            
-            # Ensure proper ordering top-left to bottom-right
-            min_x, max_x = min(x1, x2), max(x1, x2)
-            min_y, max_y = min(y1, y2), max(y1, y2)
-            
-            self.points[self.current_mode] = [min_x, min_y, max_x, max_y]
-            
-            rect_id = self.canvas.create_rectangle(min_x, min_y, max_x, max_y, outline=self.colors[self.current_mode], width=3)
-            self.rects[self.current_mode] = rect_id
-            
-            self.lbl_status.config(text=f"Đã vẽ xong {self.current_mode.capitalize()} Zone!", fg="green")
-            self.current_mode = None
-            self.temp_point = None
+
+        if self.first_point is None:
+            self.first_point = (event.x, event.y)
+            self.temp_marker = self.canvas.create_oval(
+                event.x - 3,
+                event.y - 3,
+                event.x + 3,
+                event.y + 3,
+                fill=self.colors[self.current_mode],
+            )
+            return
+
+        x1, y1 = self.first_point
+        x2, y2 = event.x, event.y
+        self.canvas.delete(self.temp_marker)
+        bounds = [min(x1, x2), min(y1, y2), max(x1, x2), max(y1, y2)]
+        self.points[self.current_mode] = bounds
+        self.rectangles[self.current_mode] = self.canvas.create_rectangle(
+            *bounds,
+            outline=self.colors[self.current_mode],
+            width=3,
+        )
+        self.status.config(text=f"{self.current_mode.title()} zone ready.", fg="green")
+        self.current_mode = None
+        self.first_point = None
+
+    def _zone_from_bounds(self, mode, zone_id, name, zone_type):
+        bounds = self.points[mode]
+        if not bounds:
+            return None
+        x1, y1, x2, y2 = (int(value / self.scale_factor) for value in bounds)
+        return {
+            "id": zone_id,
+            "name": name,
+            "type": zone_type,
+            "polygon": [[x1, y1], [x2, y1], [x2, y2], [x1, y2]],
+        }
 
     def save_and_exit(self):
-        if not self.points["danger"] and not self.points["warning"]:
-            messagebox.showinfo("Thông báo", "Không có zone nào được vẽ. Đóng ứng dụng.")
-            self.root.destroy()
+        new_zones = [
+            zone
+            for zone in (
+                self._zone_from_bounds("danger", "Z01", "Danger Zone", "danger_zone"),
+                self._zone_from_bounds("warning", "Z02", "Warning Zone", "warning_zone"),
+            )
+            if zone
+        ]
+        if not new_zones:
+            messagebox.showinfo("No changes", "No zones were drawn.")
             return
 
-        zones_data = {"zones": []}
-        
-        # Danger Zone logic
-        if self.points["danger"]:
-            x1, y1, x2, y2 = self.points["danger"]
-            x1, y1 = int(x1 / self.scale_factor), int(y1 / self.scale_factor)
-            x2, y2 = int(x2 / self.scale_factor), int(y2 / self.scale_factor)
-            polygon = [[x1, y1], [x2, y1], [x2, y2], [x1, y2]]
-            zones_data["zones"].append({
-                "id": "Z01",
-                "name": "Danger Zone",
-                "type": "danger_zone",
-                "polygon": polygon
-            })
-            
-        # Warning Zone logic
-        if self.points["warning"]:
-            x1, y1, x2, y2 = self.points["warning"]
-            x1, y1 = int(x1 / self.scale_factor), int(y1 / self.scale_factor)
-            x2, y2 = int(x2 / self.scale_factor), int(y2 / self.scale_factor)
-            polygon = [[x1, y1], [x2, y1], [x2, y2], [x1, y2]]
-            zones_data["zones"].append({
-                "id": "Z02",
-                "name": "Warning Zone",
-                "type": "warning_zone",
-                "polygon": polygon
-            })
-
-        # Read existing to not overwrite un-drawn zones
         try:
-            with open("configs/zones.json", "r", encoding="utf-8") as f:
-                existing_data = json.load(f)
-        except Exception:
-            existing_data = {"zones": []}
+            existing = json.loads(self.output_path.read_text(encoding="utf-8"))
+        except (FileNotFoundError, json.JSONDecodeError):
+            existing = {"zones": []}
 
-        final_zones = []
-        updated_types = [z["type"] for z in zones_data["zones"]]
-        for ez in existing_data.get("zones", []):
-            if ez["type"] not in updated_types:
-                final_zones.append(ez)
-        
-        final_zones.extend(zones_data["zones"])
+        updated_types = {zone["type"] for zone in new_zones}
+        zones = [
+            zone
+            for zone in existing.get("zones", [])
+            if zone.get("type") not in updated_types
+        ]
+        zones.extend(new_zones)
 
-        with open("configs/zones.json", "w", encoding="utf-8") as f:
-            json.dump({"zones": final_zones}, f, indent=2)
-            
-        messagebox.showinfo("Thành công", "Đã cập nhật zones.json thành công!\nBây giờ bạn có thể tiếp tục chạy edge_infer.py")
+        data = {
+            "source": self.source_name,
+            "width": self.source_width or self.original_image.width,
+            "height": self.source_height or self.original_image.height,
+            "zones": zones,
+        }
+        self.output_path.parent.mkdir(parents=True, exist_ok=True)
+        self.output_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        messagebox.showinfo("Saved", f"Zone profile saved to:\n{self.output_path}")
         self.root.destroy()
 
-if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("Sử dụng: python zone_editor.py <image_path>")
-        sys.exit(1)
-        
-    img_path = sys.argv[1]
+
+def main():
+    parser = argparse.ArgumentParser(description="Create safety zones on a video frame.")
+    parser.add_argument("image_path")
+    parser.add_argument("--output", default="configs/zones.json")
+    parser.add_argument("--source")
+    parser.add_argument("--width", type=int)
+    parser.add_argument("--height", type=int)
+    args = parser.parse_args()
+
     root = tk.Tk()
-    app = ZoneEditor(root, img_path)
+    ZoneEditor(
+        root,
+        args.image_path,
+        args.output,
+        args.source,
+        args.width,
+        args.height,
+    )
     root.mainloop()
+
+
+if __name__ == "__main__":
+    main()
