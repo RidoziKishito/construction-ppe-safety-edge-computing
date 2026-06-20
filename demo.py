@@ -145,6 +145,7 @@ def create_run(source, model, zone_profile, args):
         "smoothing_frames": args.smooth,
         "inference_interval": args.inference_interval,
         "alert_cooldown_seconds": args.alert_cooldown,
+        "live_preview_fps": args.live_preview_fps,
     }
     write_json(run_dir / "run.json", metadata)
     write_json(
@@ -180,6 +181,10 @@ def run_pipeline(source, model, zone_profile, run_dir, args):
         str(args.inference_interval),
         "--alert-cooldown",
         str(args.alert_cooldown),
+        "--live-frame",
+        str(run_dir / "live_frame.jpg"),
+        "--live-preview-fps",
+        str(args.live_preview_fps),
     ]
     if args.headless:
         command.append("--headless")
@@ -200,6 +205,7 @@ def main():
     parser.add_argument("--smooth", type=int, default=5)
     parser.add_argument("--inference-interval", type=int, default=3)
     parser.add_argument("--alert-cooldown", type=float, default=5.0)
+    parser.add_argument("--live-preview-fps", type=float, default=10.0)
     parser.add_argument("--headless", action="store_true")
     parser.add_argument("--max-frames", type=int)
     parser.add_argument("--configure-zones", action="store_true")

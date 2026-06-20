@@ -1,7 +1,7 @@
 python ..\demo.py --source demo_video3.mp4
 
 # Explicit performance and deduplication settings:
-python ..\demo.py --source demo_video3.mp4 --inference-interval 3 --alert-cooldown 5
+python ..\demo.py --source demo_video3.mp4 --inference-interval 3 --alert-cooldown 5 --live-preview-fps 10
 
 # Force zone editing:
 python ..\demo.py --source demo_video3.mp4 --configure-zones

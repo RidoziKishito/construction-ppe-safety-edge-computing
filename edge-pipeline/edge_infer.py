@@ -10,7 +10,12 @@ from ultralytics import YOLO
 import display
 import rule_engine
 from logger import EdgeLogger
-from pipeline_control import ALERT_SEVERITY, TemporalSmoother, should_run_inference
+from pipeline_control import (
+    ALERT_SEVERITY,
+    TemporalSmoother,
+    should_publish_live_frame,
+    should_run_inference,
+)
 
 
 VIOLATION_CLASSES = {
@@ -200,6 +205,27 @@ def evaluate_detections(
     return current_frame_alerts
 
 
+def publish_live_frame(frame, destination):
+    destination = Path(destination)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    ok, encoded = cv2.imencode(
+        ".jpg",
+        frame,
+        [cv2.IMWRITE_JPEG_QUALITY, 82],
+    )
+    if not ok:
+        return False
+
+    temporary = destination.with_suffix(destination.suffix + ".tmp")
+    temporary.write_bytes(encoded.tobytes())
+    try:
+        os.replace(temporary, destination)
+    except OSError:
+        temporary.unlink(missing_ok=True)
+        return False
+    return True
+
+
 def run_pipeline(
     model_path,
     source,
@@ -215,6 +241,8 @@ def run_pipeline(
     camera_id=None,
     inference_interval=1,
     alert_cooldown=5.0,
+    live_frame_path=None,
+    live_preview_fps=10.0,
 ):
     del classes_path  # Kept for CLI compatibility.
     model = YOLO(model_path)
@@ -257,6 +285,7 @@ def run_pipeline(
     )
     cached_persons = []
     cached_other_detections = []
+    last_live_frame_at = None
     frame_id = 0
 
     print(
@@ -303,6 +332,15 @@ def run_pipeline(
                 log_data["frame_img"] = frame
                 safety_logger.log_violation(**log_data)
 
+        video_time_seconds = (frame_id - 1) / fps
+        if live_frame_path and should_publish_live_frame(
+            video_time_seconds,
+            last_live_frame_at,
+            live_preview_fps,
+        ):
+            if publish_live_frame(frame, live_frame_path):
+                last_live_frame_at = video_time_seconds
+
         writer.write(frame)
         if not headless:
             cv2.imshow(window_name, frame)
@@ -338,6 +376,8 @@ if __name__ == "__main__":
     parser.add_argument("--camera-id")
     parser.add_argument("--inference-interval", type=int, default=1)
     parser.add_argument("--alert-cooldown", type=float, default=5.0)
+    parser.add_argument("--live-frame")
+    parser.add_argument("--live-preview-fps", type=float, default=10.0)
     args = parser.parse_args()
 
     raise SystemExit(
@@ -356,5 +396,7 @@ if __name__ == "__main__":
             args.camera_id,
             args.inference_interval,
             args.alert_cooldown,
+            args.live_frame,
+            args.live_preview_fps,
         )
     )

@@ -618,6 +618,26 @@ small {
   animation: live-pulse 1.5s infinite ease-in-out;
 }
 
+.live-badge.completed {
+  background: #E2E8F0;
+  color: var(--slate);
+}
+
+.live-badge.completed::before {
+  background-color: var(--slate);
+  animation: none;
+}
+
+.live-badge.idle {
+  background: #F3F4F6;
+  color: var(--muted);
+}
+
+.live-badge.idle::before {
+  background-color: var(--muted);
+  animation: none;
+}
+
 @keyframes live-pulse {
   0% {
     transform: scale(0.9);

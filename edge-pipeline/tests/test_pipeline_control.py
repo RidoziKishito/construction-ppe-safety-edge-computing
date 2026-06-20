@@ -4,7 +4,11 @@ import unittest
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from pipeline_control import TemporalSmoother, should_run_inference
+from pipeline_control import (
+    TemporalSmoother,
+    should_publish_live_frame,
+    should_run_inference,
+)
 
 
 def alert(level, marker):
@@ -60,6 +64,12 @@ class TestInferenceSchedule(unittest.TestCase):
 
     def test_non_positive_interval_falls_back_to_every_frame(self):
         self.assertTrue(all(should_run_inference(frame_id, 0) for frame_id in range(1, 5)))
+
+    def test_live_preview_schedule_is_rate_limited(self):
+        self.assertTrue(should_publish_live_frame(0.0, None, 10))
+        self.assertFalse(should_publish_live_frame(0.05, 0.0, 10))
+        self.assertTrue(should_publish_live_frame(0.1, 0.0, 10))
+        self.assertFalse(should_publish_live_frame(1.0, None, 0))
 
 
 if __name__ == "__main__":

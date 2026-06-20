@@ -83,6 +83,9 @@ const modal = document.getElementById("snapshot-modal");
 const modalImage = document.getElementById("modal-image");
 const modalFallback = document.getElementById("modal-fallback");
 const modalMeta = document.getElementById("modal-meta");
+const liveIndicator = document.getElementById("live-indicator");
+let livePolling = false;
+let liveFrameTimer = null;
 
 function formatTime(value) {
   const date = new Date(value);
@@ -179,23 +182,92 @@ async function refreshStats() {
   }
 }
 
-async function refreshFrame() {
+function showFeedImage(url, label) {
+  liveFrame.onload = () => {
+    liveFrame.classList.remove("hidden");
+    frameFallback.classList.add("hidden");
+    feedState.textContent = label;
+  };
+  liveFrame.onerror = () => {
+    liveFrame.classList.add("hidden");
+    frameFallback.classList.remove("hidden");
+  };
+  liveFrame.src = url;
+}
+
+function requestLiveFrame() {
+  if (!livePolling) return;
+  liveFrame.onload = () => {
+    liveFrame.classList.remove("hidden");
+    frameFallback.classList.add("hidden");
+    feedState.textContent = "Live pipeline frame";
+    liveFrameTimer = setTimeout(requestLiveFrame, 100);
+  };
+  liveFrame.onerror = () => {
+    liveFrameTimer = setTimeout(requestLiveFrame, 400);
+  };
+  liveFrame.src = `/api/live-frame?t=${Date.now()}`;
+}
+
+function startLivePolling() {
+  if (livePolling) return;
+  livePolling = true;
+  requestLiveFrame();
+}
+
+function stopLivePolling() {
+  livePolling = false;
+  if (liveFrameTimer) clearTimeout(liveFrameTimer);
+  liveFrameTimer = null;
+}
+
+async function refreshFrameState() {
   try {
-    const response = await fetch("/api/stats");
-    if (!response.ok) throw new Error("Network response was not ok");
-    const stats = await response.json();
-    if (stats.latest_frame_url) {
-      liveFrame.src = `${stats.latest_frame_url}&t=${Date.now()}`;
-      liveFrame.classList.remove("hidden");
-      frameFallback.classList.add("hidden");
-      feedState.textContent = "Latest alert frame";
+    const [runResponse, statsResponse] = await Promise.all([
+      fetch("/api/run"),
+      fetch("/api/stats")
+    ]);
+    if (!runResponse.ok || !statsResponse.ok) {
+      throw new Error("Network response was not ok");
+    }
+
+    const runPayload = await runResponse.json();
+    const stats = await statsResponse.json();
+    const runStatus = runPayload.run ? runPayload.run.status : null;
+
+    liveIndicator.classList.remove("completed", "idle");
+    if (runStatus === "starting" || runStatus === "running") {
+      liveIndicator.textContent = "Live";
+      startLivePolling();
+      return;
+    }
+
+    stopLivePolling();
+    if (runStatus === "completed") {
+      liveIndicator.textContent = "Completed";
+      liveIndicator.classList.add("completed");
+    } else {
+      liveIndicator.textContent = "Idle";
+      liveIndicator.classList.add("idle");
+    }
+
+    if (stats.live_frame_url) {
+      showFeedImage(
+        `${stats.live_frame_url}?t=${Date.now()}`,
+        runStatus === "completed" ? "Final pipeline frame" : "Latest pipeline frame"
+      );
+    } else if (stats.latest_frame_url) {
+      showFeedImage(
+        `${stats.latest_frame_url}&t=${Date.now()}`,
+        "Latest alert frame"
+      );
     } else {
       liveFrame.classList.add("hidden");
       frameFallback.classList.remove("hidden");
       feedState.textContent = "No frame file";
     }
   } catch (error) {
-    console.error("Error refreshing frame:", error);
+    console.error("Error refreshing frame state:", error);
   }
 }
 
@@ -211,9 +283,9 @@ modal.addEventListener("click", event => {
 tickClock();
 pollAlerts();
 refreshStats();
-refreshFrame();
+refreshFrameState();
 setInterval(tickClock, 1000);
-setInterval(refreshFrame, 2000);
+setInterval(refreshFrameState, 2000);
 setInterval(() => {
   pollAlerts();
   refreshStats();

@@ -54,6 +54,7 @@ Useful options:
 - --smooth 5
 - --inference-interval 3
 - --alert-cooldown 5
+- --live-preview-fps 10
 - --no-browser
 - --no-dashboard
 

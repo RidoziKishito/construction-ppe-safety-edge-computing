@@ -243,6 +243,14 @@ def event_with_snapshot_url(event: dict[str, Any]) -> dict[str, Any]:
     return enriched
 
 
+def active_live_frame() -> Path | None:
+    run_dir, _ = active_run()
+    if not run_dir:
+        return None
+    live_frame = run_dir / "live_frame.jpg"
+    return live_frame if live_frame.is_file() else None
+
+
 @app.route("/")
 def index():
     return render_template("index.html", active_page="monitor")
@@ -296,6 +304,9 @@ def api_stats():
             "warning_today": sum(1 for event in todays_events if event["alert_level"] == "WARNING"),
             "critical_today": sum(1 for event in todays_events if event["alert_level"] == "CRITICAL"),
             "latest_frame_url": latest_frame_url,
+            "live_frame_url": (
+                url_for("api_live_frame") if active_live_frame() else None
+            ),
             "generated_at": datetime.now().replace(microsecond=0).isoformat(),
         }
     )
@@ -310,6 +321,23 @@ def api_run():
             "run": metadata,
         }
     )
+
+
+@app.route("/api/live-frame")
+def api_live_frame():
+    live_frame = active_live_frame()
+    if live_frame is None:
+        abort(404)
+    response = send_file(
+        live_frame,
+        mimetype="image/jpeg",
+        conditional=False,
+        max_age=0,
+    )
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
 
 
 @app.route("/api/snapshot")

@@ -51,6 +51,7 @@ class DemoWorkflowTests(unittest.TestCase):
             smooth=5,
             inference_interval=3,
             alert_cooldown=5.0,
+            live_preview_fps=10.0,
             headless=True,
             max_frames=25,
         )
@@ -78,6 +79,9 @@ class DemoWorkflowTests(unittest.TestCase):
             self.assertIn("3", command)
             self.assertIn("--alert-cooldown", command)
             self.assertIn("5.0", command)
+            self.assertIn("--live-frame", command)
+            self.assertIn("--live-preview-fps", command)
+            self.assertIn("10.0", command)
 
     def test_created_run_becomes_dashboard_active_run(self):
         dashboard_module = importlib.import_module("dashboard.app")
@@ -116,8 +120,10 @@ class DemoWorkflowTests(unittest.TestCase):
                     smooth=5,
                     inference_interval=3,
                     alert_cooldown=5.0,
+                    live_preview_fps=10.0,
                 )
                 run_dir, metadata = demo.create_run(source, model, zones, args)
+                (run_dir / "live_frame.jpg").write_bytes(b"\xff\xd8\xff\xd9")
 
                 with (run_dir / "events.csv").open(
                     "w", encoding="utf-8", newline=""
@@ -152,6 +158,8 @@ class DemoWorkflowTests(unittest.TestCase):
                 client = dashboard_module.app.test_client()
                 run_payload = client.get("/api/run").get_json()
                 events_payload = client.get("/api/events").get_json()
+                stats_payload = client.get("/api/stats").get_json()
+                live_response = client.get("/api/live-frame")
 
                 self.assertTrue(run_payload["active"])
                 self.assertEqual(run_payload["run"]["run_id"], metadata["run_id"])
@@ -159,6 +167,10 @@ class DemoWorkflowTests(unittest.TestCase):
                 self.assertEqual(
                     events_payload["events"][0]["camera_id"], "CAM-TEST"
                 )
+                self.assertEqual(stats_payload["live_frame_url"], "/api/live-frame")
+                self.assertEqual(live_response.status_code, 200)
+                self.assertIn("no-store", live_response.headers["Cache-Control"])
+                live_response.close()
             finally:
                 demo.RUNS_DIR = original_demo_runs
                 demo.ACTIVE_RUN_PATH = original_demo_active

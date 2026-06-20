@@ -73,3 +73,11 @@ class TemporalSmoother:
 def should_run_inference(frame_id, inference_interval):
     interval = max(1, inference_interval)
     return (frame_id - 1) % interval == 0
+
+
+def should_publish_live_frame(timestamp_seconds, last_published_at, preview_fps):
+    if preview_fps <= 0:
+        return False
+    if last_published_at is None:
+        return True
+    return timestamp_seconds - last_published_at >= 1.0 / preview_fps
