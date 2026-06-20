@@ -2,6 +2,8 @@ import argparse
 import json
 import math
 import os
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 import cv2
@@ -205,25 +207,52 @@ def evaluate_detections(
     return current_frame_alerts
 
 
-def publish_live_frame(frame, destination):
-    destination = Path(destination)
-    destination.parent.mkdir(parents=True, exist_ok=True)
+def encode_live_frame(frame):
     ok, encoded = cv2.imencode(
         ".jpg",
         frame,
         [cv2.IMWRITE_JPEG_QUALITY, 82],
     )
     if not ok:
-        return False
+        return None
+    return encoded.tobytes()
+
+
+def write_live_frame(frame_bytes, destination):
+    destination = Path(destination)
+    destination.parent.mkdir(parents=True, exist_ok=True)
 
     temporary = destination.with_suffix(destination.suffix + ".tmp")
-    temporary.write_bytes(encoded.tobytes())
+    temporary.write_bytes(frame_bytes)
     try:
         os.replace(temporary, destination)
     except OSError:
         temporary.unlink(missing_ok=True)
         return False
     return True
+
+
+def publish_live_frame(frame, destination):
+    frame_bytes = encode_live_frame(frame)
+    if frame_bytes is None:
+        return False
+    return write_live_frame(frame_bytes, destination)
+
+
+def push_live_frame(frame_bytes, push_url, timeout=0.2):
+    if not push_url:
+        return False
+    request = urllib.request.Request(
+        push_url,
+        data=frame_bytes,
+        headers={"Content-Type": "image/jpeg"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            return 200 <= response.status < 300
+    except (OSError, TimeoutError, urllib.error.URLError):
+        return False
 
 
 def run_pipeline(
@@ -242,7 +271,8 @@ def run_pipeline(
     inference_interval=1,
     alert_cooldown=5.0,
     live_frame_path=None,
-    live_preview_fps=10.0,
+    live_preview_fps=20.0,
+    frame_push_url=None,
 ):
     del classes_path  # Kept for CLI compatibility.
     model = YOLO(model_path)
@@ -286,6 +316,7 @@ def run_pipeline(
     cached_persons = []
     cached_other_detections = []
     last_live_frame_at = None
+    frame_push_failures = 0
     frame_id = 0
 
     print(
@@ -333,12 +364,20 @@ def run_pipeline(
                 safety_logger.log_violation(**log_data)
 
         video_time_seconds = (frame_id - 1) / fps
-        if live_frame_path and should_publish_live_frame(
+        if (live_frame_path or frame_push_url) and should_publish_live_frame(
             video_time_seconds,
             last_live_frame_at,
             live_preview_fps,
         ):
-            if publish_live_frame(frame, live_frame_path):
+            frame_bytes = encode_live_frame(frame)
+            if frame_bytes is not None:
+                if live_frame_path:
+                    write_live_frame(frame_bytes, live_frame_path)
+                if frame_push_url and frame_push_failures < 3:
+                    if push_live_frame(frame_bytes, frame_push_url):
+                        frame_push_failures = 0
+                    else:
+                        frame_push_failures += 1
                 last_live_frame_at = video_time_seconds
 
         writer.write(frame)
@@ -377,7 +416,8 @@ if __name__ == "__main__":
     parser.add_argument("--inference-interval", type=int, default=1)
     parser.add_argument("--alert-cooldown", type=float, default=5.0)
     parser.add_argument("--live-frame")
-    parser.add_argument("--live-preview-fps", type=float, default=10.0)
+    parser.add_argument("--live-preview-fps", type=float, default=20.0)
+    parser.add_argument("--frame-push-url")
     args = parser.parse_args()
 
     raise SystemExit(
@@ -398,5 +438,6 @@ if __name__ == "__main__":
             args.alert_cooldown,
             args.live_frame,
             args.live_preview_fps,
+            args.frame_push_url,
         )
     )

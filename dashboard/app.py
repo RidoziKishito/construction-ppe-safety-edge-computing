@@ -9,11 +9,13 @@ from __future__ import annotations
 import ast
 import csv
 import json
+import threading
+import time
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
-from flask import Flask, abort, jsonify, render_template, request, send_file, url_for
+from flask import Flask, Response, abort, jsonify, render_template, request, send_file, url_for
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -36,6 +38,10 @@ app = Flask(
     template_folder=str(BASE_DIR / "templates"),
     static_folder=str(BASE_DIR / "static"),
 )
+
+LIVE_FRAME_CONDITION = threading.Condition(threading.Lock())
+latest_live_frame: bytes | None = None
+latest_live_frame_version = 0
 
 
 def parse_timestamp(value: Any) -> datetime | None:
@@ -251,6 +257,43 @@ def active_live_frame() -> Path | None:
     return live_frame if live_frame.is_file() else None
 
 
+def update_live_frame(frame_bytes: bytes) -> int:
+    global latest_live_frame, latest_live_frame_version
+    with LIVE_FRAME_CONDITION:
+        latest_live_frame = bytes(frame_bytes)
+        latest_live_frame_version += 1
+        LIVE_FRAME_CONDITION.notify_all()
+        return latest_live_frame_version
+
+
+def mjpeg_frames():
+    last_version = 0
+    while True:
+        with LIVE_FRAME_CONDITION:
+            LIVE_FRAME_CONDITION.wait_for(
+                lambda: (
+                    latest_live_frame is not None
+                    and latest_live_frame_version != last_version
+                ),
+                timeout=5.0,
+            )
+            frame = latest_live_frame
+            last_version = latest_live_frame_version
+
+        if frame is None:
+            time.sleep(0.1)
+            continue
+
+        yield (
+            b"--frame\r\n"
+            b"Content-Type: image/jpeg\r\n"
+            b"Cache-Control: no-cache\r\n"
+            b"Content-Length: " + str(len(frame)).encode("ascii") + b"\r\n\r\n"
+            + frame
+            + b"\r\n"
+        )
+
+
 @app.route("/")
 def index():
     return render_template("index.html", active_page="monitor")
@@ -340,6 +383,32 @@ def api_live_frame():
     return response
 
 
+@app.route("/api/push-frame", methods=["POST"])
+def api_push_frame():
+    frame = request.get_data(cache=False)
+    if not frame:
+        abort(400)
+    if len(frame) > 5 * 1024 * 1024:
+        abort(413)
+    if not frame.startswith(b"\xff\xd8"):
+        abort(400)
+
+    version = update_live_frame(frame)
+    return jsonify({"ok": True, "version": version})
+
+
+@app.route("/video-feed")
+def video_feed():
+    response = Response(
+        mjpeg_frames(),
+        mimetype="multipart/x-mixed-replace; boundary=frame",
+    )
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
+
+
 @app.route("/api/snapshot")
 def api_snapshot():
     path = request.args.get("path")
@@ -350,4 +419,4 @@ def api_snapshot():
 
 
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=5000, debug=False)
+    app.run(host="127.0.0.1", port=5000, debug=False, threaded=True)

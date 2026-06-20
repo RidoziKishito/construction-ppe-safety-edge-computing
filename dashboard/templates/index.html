@@ -35,7 +35,7 @@
       <span id="feed-state" class="state-label">Waiting for frame</span>
     </div>
     <div class="video-surface" id="video-surface">
-      <img id="live-frame" class="live-frame hidden" alt="Latest safety alert frame">
+      <img id="live-frame" class="live-frame hidden" alt="Live safety camera feed">
       <div id="frame-fallback" class="frame-fallback">
         <span>No frame available</span>
         <small>Alert snapshots appear here when the edge logger writes image files.</small>
@@ -84,8 +84,7 @@ const modalImage = document.getElementById("modal-image");
 const modalFallback = document.getElementById("modal-fallback");
 const modalMeta = document.getElementById("modal-meta");
 const liveIndicator = document.getElementById("live-indicator");
-let livePolling = false;
-let liveFrameTimer = null;
+let streamingFeed = false;
 
 function formatTime(value) {
   const date = new Date(value);
@@ -183,6 +182,7 @@ async function refreshStats() {
 }
 
 function showFeedImage(url, label) {
+  streamingFeed = false;
   liveFrame.onload = () => {
     liveFrame.classList.remove("hidden");
     frameFallback.classList.add("hidden");
@@ -195,30 +195,29 @@ function showFeedImage(url, label) {
   liveFrame.src = url;
 }
 
-function requestLiveFrame() {
-  if (!livePolling) return;
+function showLiveStream() {
+  if (streamingFeed) return;
+  streamingFeed = true;
   liveFrame.onload = () => {
     liveFrame.classList.remove("hidden");
     frameFallback.classList.add("hidden");
-    feedState.textContent = "Live pipeline frame";
-    liveFrameTimer = setTimeout(requestLiveFrame, 100);
   };
   liveFrame.onerror = () => {
-    liveFrameTimer = setTimeout(requestLiveFrame, 400);
+    streamingFeed = false;
+    liveFrame.classList.add("hidden");
+    frameFallback.classList.remove("hidden");
+    feedState.textContent = "Waiting for stream";
   };
-  liveFrame.src = `/api/live-frame?t=${Date.now()}`;
+  liveFrame.src = `/video-feed?t=${Date.now()}`;
+  liveFrame.classList.remove("hidden");
+  frameFallback.classList.add("hidden");
+  feedState.textContent = "Live CCTV stream";
 }
 
-function startLivePolling() {
-  if (livePolling) return;
-  livePolling = true;
-  requestLiveFrame();
-}
-
-function stopLivePolling() {
-  livePolling = false;
-  if (liveFrameTimer) clearTimeout(liveFrameTimer);
-  liveFrameTimer = null;
+function stopLiveStream() {
+  if (!streamingFeed) return;
+  streamingFeed = false;
+  liveFrame.removeAttribute("src");
 }
 
 async function refreshFrameState() {
@@ -238,11 +237,11 @@ async function refreshFrameState() {
     liveIndicator.classList.remove("completed", "idle");
     if (runStatus === "starting" || runStatus === "running") {
       liveIndicator.textContent = "Live";
-      startLivePolling();
+      showLiveStream();
       return;
     }
 
-    stopLivePolling();
+    stopLiveStream();
     if (runStatus === "completed") {
       liveIndicator.textContent = "Completed";
       liveIndicator.classList.add("completed");

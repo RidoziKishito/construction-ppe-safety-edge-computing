@@ -51,9 +51,10 @@ class DemoWorkflowTests(unittest.TestCase):
             smooth=5,
             inference_interval=3,
             alert_cooldown=5.0,
-            live_preview_fps=10.0,
+            live_preview_fps=20.0,
             headless=True,
             max_frames=25,
+            no_dashboard=False,
         )
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -81,7 +82,9 @@ class DemoWorkflowTests(unittest.TestCase):
             self.assertIn("5.0", command)
             self.assertIn("--live-frame", command)
             self.assertIn("--live-preview-fps", command)
-            self.assertIn("10.0", command)
+            self.assertIn("20.0", command)
+            self.assertIn("--frame-push-url", command)
+            self.assertIn("http://127.0.0.1:5000/api/push-frame", command)
 
     def test_created_run_becomes_dashboard_active_run(self):
         dashboard_module = importlib.import_module("dashboard.app")
@@ -120,7 +123,8 @@ class DemoWorkflowTests(unittest.TestCase):
                     smooth=5,
                     inference_interval=3,
                     alert_cooldown=5.0,
-                    live_preview_fps=10.0,
+                    live_preview_fps=20.0,
+                    no_dashboard=False,
                 )
                 run_dir, metadata = demo.create_run(source, model, zones, args)
                 (run_dir / "live_frame.jpg").write_bytes(b"\xff\xd8\xff\xd9")
@@ -160,6 +164,11 @@ class DemoWorkflowTests(unittest.TestCase):
                 events_payload = client.get("/api/events").get_json()
                 stats_payload = client.get("/api/stats").get_json()
                 live_response = client.get("/api/live-frame")
+                push_response = client.post(
+                    "/api/push-frame",
+                    data=b"\xff\xd8\xff\xd9",
+                    content_type="image/jpeg",
+                )
 
                 self.assertTrue(run_payload["active"])
                 self.assertEqual(run_payload["run"]["run_id"], metadata["run_id"])
@@ -170,6 +179,15 @@ class DemoWorkflowTests(unittest.TestCase):
                 self.assertEqual(stats_payload["live_frame_url"], "/api/live-frame")
                 self.assertEqual(live_response.status_code, 200)
                 self.assertIn("no-store", live_response.headers["Cache-Control"])
+                self.assertEqual(push_response.status_code, 200)
+                self.assertTrue(push_response.get_json()["ok"])
+                feed = dashboard_module.mjpeg_frames()
+                try:
+                    chunk = next(feed)
+                finally:
+                    feed.close()
+                self.assertIn(b"Content-Type: image/jpeg", chunk)
+                self.assertIn(b"\xff\xd8\xff\xd9", chunk)
                 live_response.close()
             finally:
                 demo.RUNS_DIR = original_demo_runs
