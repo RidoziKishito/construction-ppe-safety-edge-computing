@@ -319,6 +319,10 @@ def run_pipeline(
     frame_push_failures = 0
     frame_id = 0
 
+    last_zones_mtime = 0
+    if Path(zones_path).exists():
+        last_zones_mtime = Path(zones_path).stat().st_mtime
+
     print(
         "Running video stream. "
         f"Smoothing={smooth_frames}, inference interval={inference_interval}, "
@@ -333,6 +337,15 @@ def run_pipeline(
         frame_id += 1
         if max_frames and frame_id > max_frames:
             break
+
+        # Check for zone updates every ~1 second
+        if frame_id % int(fps) == 0 and Path(zones_path).exists():
+            current_mtime = Path(zones_path).stat().st_mtime
+            if current_mtime > last_zones_mtime:
+                print(f"Zones config changed. Reloading from {zones_path}...")
+                zones_config = load_zones(zones_path)
+                validate_zone_profile(zones_config, width, height)
+                last_zones_mtime = current_mtime
 
         inference_frame = should_run_inference(frame_id, inference_interval)
         if inference_frame:

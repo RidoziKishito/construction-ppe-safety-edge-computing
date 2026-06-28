@@ -30,8 +30,17 @@
 
 <section class="monitor-grid">
   <div class="panel live-panel">
-    <div class="section-header">
-      <h2>Site Feed</h2>
+    <div class="section-header" style="display: flex; justify-content: space-between; align-items: center;">
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <h2>Site Feed</h2>
+        <button id="edit-zones-btn" class="btn btn-secondary" style="font-size: 12px; padding: 4px 10px; border-radius: 4px; display: none; cursor: pointer;">
+          <svg style="width: 14px; height: 14px; vertical-align: middle; margin-right: 4px; display: inline-block;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 20h9"></path>
+            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+          </svg>
+          Edit Zones
+        </button>
+      </div>
       <span id="feed-state" class="state-label">Waiting for frame</span>
     </div>
     <div class="video-surface" id="video-surface">
@@ -173,6 +182,7 @@ async function refreshStats() {
     const response = await fetch("/api/stats");
     if (!response.ok) throw new Error("Network response was not ok");
     const stats = await response.json();
+    
     updateMetricWithFlash(alertsToday, stats.total_alerts_today);
     updateMetricWithFlash(warningToday, stats.warning_today);
     updateMetricWithFlash(criticalToday, stats.critical_today);
@@ -235,6 +245,13 @@ async function refreshFrameState() {
     const runStatus = runPayload.run ? runPayload.run.status : null;
 
     liveIndicator.classList.remove("completed", "idle");
+    
+    if (runStatus === "starting" || runStatus === "running" || runStatus === "completed") {
+      document.getElementById("edit-zones-btn").style.display = "inline-flex";
+    } else {
+      document.getElementById("edit-zones-btn").style.display = "none";
+    }
+
     if (runStatus === "starting" || runStatus === "running") {
       liveIndicator.textContent = "Live";
       showLiveStream();
@@ -277,6 +294,34 @@ function tickClock() {
 document.getElementById("modal-close").addEventListener("click", () => modal.classList.add("hidden"));
 modal.addEventListener("click", event => {
   if (event.target === modal) modal.classList.add("hidden");
+});
+
+document.getElementById("edit-zones-btn").addEventListener("click", async (e) => {
+  const btn = e.currentTarget;
+  if (btn.disabled) return;
+  
+  const originalText = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = `<span style="display:inline-block; margin-right:4px; animation: spin 1s linear infinite;">⏳</span> Loading 100%...`;
+  
+  try {
+    const response = await fetch("/api/edit-zones", { method: "POST" });
+    const data = await response.json();
+    if (data.ok) {
+      btn.innerHTML = `✅ Opened!`;
+    } else {
+      btn.innerHTML = `⚠️ ${data.error}`;
+    }
+  } catch (error) {
+    console.error("Error launching zone editor:", error);
+    btn.innerHTML = `❌ Error`;
+  }
+  
+  // Revert back after 3 seconds
+  setTimeout(() => {
+    btn.innerHTML = originalText;
+    btn.disabled = false;
+  }, 3000);
 });
 
 tickClock();

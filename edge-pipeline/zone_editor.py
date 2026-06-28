@@ -18,7 +18,7 @@ class ZoneEditor:
         source_height=None,
     ):
         self.root = root
-        self.root.title("Trinity Zone Editor")
+        self.root.title("Trinity Zone Editor (Polygon Mode)")
         self.output_path = Path(output_path)
         self.source_name = source_name
         self.source_width = source_width
@@ -29,10 +29,8 @@ class ZoneEditor:
         self.tk_image = ImageTk.PhotoImage(self.display_image)
 
         self.current_mode = None
-        self.first_point = None
-        self.temp_marker = None
         self.points = {"danger": [], "warning": []}
-        self.rectangles = {"danger": None, "warning": None}
+        self.canvas_items = {"danger": [], "warning": []}
         self.colors = {"danger": "red", "warning": "gold"}
 
         self._build_ui()
@@ -58,96 +56,147 @@ class ZoneEditor:
         )
         self.canvas.pack()
         self.canvas.create_image(0, 0, anchor=tk.NW, image=self.tk_image)
-        self.canvas.bind("<Button-1>", self.on_click)
+        
+        # Bind left click to add point, right click to close polygon
+        self.canvas.bind("<Button-1>", self.on_left_click)
+        self.canvas.bind("<Button-3>", self.on_right_click)
 
         controls = tk.Frame(self.root)
         controls.pack(side=tk.RIGHT, fill=tk.Y, padx=10, pady=10)
 
         self.status = tk.Label(
             controls,
-            text="Select a zone type, then click two opposite corners.",
+            text="Select a zone type below.",
             fg="navy",
             wraplength=180,
+            font=("Arial", 10, "bold")
         )
-        self.status.pack(pady=10)
+        self.status.pack(pady=5)
+
+        self.instruction = tk.Label(
+            controls,
+            text="Left-Click to add points.\nRight-Click to finish shape.",
+            fg="gray",
+            wraplength=180,
+        )
+        self.instruction.pack(pady=5)
 
         tk.Button(
             controls,
-            text="Danger Zone",
+            text="Draw Danger Zone",
             bg="red",
             fg="white",
             width=16,
             command=lambda: self.set_mode("danger"),
         ).pack(pady=5)
+        
         tk.Button(
             controls,
-            text="Warning Zone",
+            text="Draw Warning Zone",
             bg="gold",
             fg="black",
             width=16,
             command=lambda: self.set_mode("warning"),
         ).pack(pady=5)
+        
         tk.Button(
             controls,
-            text="Save",
+            text="Save & Exit",
             bg="green",
             fg="white",
             width=16,
             command=self.save_and_exit,
+            font=("Arial", 10, "bold")
         ).pack(side=tk.BOTTOM, pady=20)
 
     def set_mode(self, mode):
         self.current_mode = mode
-        self.first_point = None
         self.points[mode] = []
-        if self.rectangles[mode]:
-            self.canvas.delete(self.rectangles[mode])
-            self.rectangles[mode] = None
+        
+        # Clear existing drawing for this mode
+        for item in self.canvas_items[mode]:
+            self.canvas.delete(item)
+        self.canvas_items[mode] = []
+        
         self.status.config(
-            text=f"Drawing {mode} zone: click two opposite corners.",
+            text=f"Drawing {mode.upper()} zone.\nClick points on image.",
             fg=self.colors[mode],
         )
 
-    def on_click(self, event):
+    def on_left_click(self, event):
         if not self.current_mode:
-            messagebox.showwarning("Select zone", "Select a zone type before drawing.")
+            messagebox.showwarning("Select zone", "Please select a zone type to draw first.")
             return
 
-        if self.first_point is None:
-            self.first_point = (event.x, event.y)
-            self.temp_marker = self.canvas.create_oval(
-                event.x - 3,
-                event.y - 3,
-                event.x + 3,
-                event.y + 3,
-                fill=self.colors[self.current_mode],
-            )
-            return
-
-        x1, y1 = self.first_point
-        x2, y2 = event.x, event.y
-        self.canvas.delete(self.temp_marker)
-        bounds = [min(x1, x2), min(y1, y2), max(x1, x2), max(y1, y2)]
-        self.points[self.current_mode] = bounds
-        self.rectangles[self.current_mode] = self.canvas.create_rectangle(
-            *bounds,
-            outline=self.colors[self.current_mode],
-            width=3,
+        mode = self.current_mode
+        pts = self.points[mode]
+        items = self.canvas_items[mode]
+        
+        pts.append((event.x, event.y))
+        
+        # Draw dot
+        dot = self.canvas.create_oval(
+            event.x - 3, event.y - 3, event.x + 3, event.y + 3,
+            fill=self.colors[mode]
         )
-        self.status.config(text=f"{self.current_mode.title()} zone ready.", fg="green")
+        items.append(dot)
+        
+        # Draw line from previous point
+        if len(pts) > 1:
+            x1, y1 = pts[-2]
+            line = self.canvas.create_line(
+                x1, y1, event.x, event.y,
+                fill=self.colors[mode], width=2
+            )
+            items.append(line)
+
+    def on_right_click(self, event):
+        if not self.current_mode:
+            return
+            
+        mode = self.current_mode
+        pts = self.points[mode]
+        items = self.canvas_items[mode]
+        
+        if len(pts) < 3:
+            messagebox.showwarning("Incomplete", "A polygon needs at least 3 points.")
+            return
+            
+        # Draw line from last point to first point to close the polygon
+        x_first, y_first = pts[0]
+        x_last, y_last = pts[-1]
+        line = self.canvas.create_line(
+            x_last, y_last, x_first, y_first,
+            fill=self.colors[mode], width=2
+        )
+        items.append(line)
+        
+        # Optionally, draw a semi-transparent polygon (Tkinter stipple is tricky, so we just use an outline polygon)
+        flat_pts = [coord for pt in pts for coord in pt]
+        poly = self.canvas.create_polygon(
+            flat_pts, outline=self.colors[mode], fill='', width=3
+        )
+        items.append(poly)
+        
+        self.status.config(text=f"{mode.title()} zone finished.", fg="green")
         self.current_mode = None
-        self.first_point = None
 
     def _zone_from_bounds(self, mode, zone_id, name, zone_type):
-        bounds = self.points[mode]
-        if not bounds:
+        pts = self.points[mode]
+        if len(pts) < 3:
             return None
-        x1, y1, x2, y2 = (int(value / self.scale_factor) for value in bounds)
+            
+        # Scale points back to original image resolution
+        scaled_pts = [
+            [int(x / self.scale_factor), int(y / self.scale_factor)]
+            for (x, y) in pts
+        ]
+        
         return {
             "id": zone_id,
             "name": name,
             "type": zone_type,
-            "polygon": [[x1, y1], [x2, y1], [x2, y2], [x1, y2]],
+            "polygon": scaled_pts,
         }
 
     def save_and_exit(self):
@@ -161,6 +210,7 @@ class ZoneEditor:
         ]
         if not new_zones:
             messagebox.showinfo("No changes", "No zones were drawn.")
+            self.root.destroy()
             return
 
         try:
@@ -184,7 +234,7 @@ class ZoneEditor:
         }
         self.output_path.parent.mkdir(parents=True, exist_ok=True)
         self.output_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
-        messagebox.showinfo("Saved", f"Zone profile saved to:\n{self.output_path}")
+        messagebox.showinfo("Saved", f"Polygon zone profile saved to:\n{self.output_path}")
         self.root.destroy()
 
 

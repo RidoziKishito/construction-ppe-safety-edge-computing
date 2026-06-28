@@ -193,8 +193,12 @@ def run_pipeline(source, model, zone_profile, run_dir, args):
     ]
     if not getattr(args, "no_dashboard", False):
         command.extend(["--frame-push-url", f"{DASHBOARD_URL}/api/push-frame"])
-    if args.headless:
+        # If using dashboard, hide the OpenCV window by default to avoid confusion
+        if not getattr(args, "show_window", False) and "--headless" not in command:
+            command.append("--headless")
+    elif args.headless:
         command.append("--headless")
+        
     if args.max_frames:
         command.extend(["--max-frames", str(args.max_frames)])
     return subprocess.run(command, cwd=EDGE_DIR, check=False).returncode

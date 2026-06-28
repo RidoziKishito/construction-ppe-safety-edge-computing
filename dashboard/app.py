@@ -43,6 +43,8 @@ LIVE_FRAME_CONDITION = threading.Condition(threading.Lock())
 latest_live_frame: bytes | None = None
 latest_live_frame_version = 0
 
+active_zone_editor_process = None
+
 
 def parse_timestamp(value: Any) -> datetime | None:
     if not value:
@@ -395,6 +397,46 @@ def api_push_frame():
 
     version = update_live_frame(frame)
     return jsonify({"ok": True, "version": version})
+
+
+@app.route("/api/edit-zones", methods=["POST"])
+def api_edit_zones():
+    global active_zone_editor_process
+    
+    if active_zone_editor_process is not None and active_zone_editor_process.poll() is None:
+        return jsonify({"ok": False, "error": "Editor is already open"}), 400
+
+    run_dir, metadata = active_run()
+    if not run_dir or not metadata:
+        return jsonify({"ok": False, "error": "No active run"}), 400
+    
+    source_name = metadata.get("source")
+    if not source_name:
+        return jsonify({"ok": False, "error": "Source not found in metadata"}), 400
+
+    import subprocess
+    import sys
+    
+    check_py_path = EDGE_PIPELINE_DIR / "check.py"
+    source_path = EDGE_PIPELINE_DIR / "media" / "videos" / "input" / source_name
+    if not source_path.exists():
+        source_path = EDGE_PIPELINE_DIR / source_name
+        if not source_path.exists():
+             source_path = PROJECT_ROOT / source_name
+             
+    # Run the zone editor without showing a console window
+    creation_flags = 0
+    if sys.platform == "win32":
+        creation_flags = subprocess.CREATE_NO_WINDOW
+
+    active_zone_editor_process = subprocess.Popen([
+        sys.executable,
+        str(check_py_path),
+        "--source",
+        str(source_path)
+    ], cwd=str(EDGE_PIPELINE_DIR), creationflags=creation_flags)
+    
+    return jsonify({"ok": True, "message": "Zone editor launched"})
 
 
 @app.route("/video-feed")

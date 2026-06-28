@@ -34,8 +34,8 @@ def main() -> int:
         help="Zone profile path (default: configs/zones/<video-name>.json)",
     )
     args = parser.parse_args()
-
     source = Path(args.source).expanduser().resolve()
+
     if not source.is_file():
         parser.error(f"Video file does not exist: {source}")
 
@@ -51,6 +51,10 @@ def main() -> int:
         width, height = extract_first_frame(source, preview_path)
         print(f"Video resolution: {width}x{height}")
         print(f"Opening zone editor for: {source.name}")
+        creation_flags = 0
+        if sys.platform == "win32":
+            creation_flags = subprocess.CREATE_NO_WINDOW
+            
         result = subprocess.run(
             [
                 sys.executable,
@@ -66,6 +70,7 @@ def main() -> int:
                 str(height),
             ],
             check=False,
+            creationflags=creation_flags,
         )
         return result.returncode
     finally:
