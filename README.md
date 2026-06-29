@@ -68,8 +68,9 @@ Camera (RTSP / USB)
   +------------------------------------------+
         |
         v
-  Edge Gateway (MQTT / WebSocket)
+  Edge Gateway (MQTT / WebSocket / Local Web Dashboard)
   +------------------------------------------+
+  |  Live Web UI (Local network)             |
   |  Date-prefixed CSV logs                  |
   |  Violation image snapshots               |
   +------------------------------------------+
@@ -265,7 +266,7 @@ Zone-based safety is the core differentiator of this system. Rather than applyin
 
 ### Zone Configuration
 
-Zones are defined as 2D polygons over the camera frame, stored in a JSON config file:
+Zones are defined as 2D polygons over the camera frame, stored in a JSON config file. The system features an **Interactive Zone Editor** integrated directly into the local dashboard, allowing users to draw perspective-accurate, multi-point polygons (e.g., trapezoids, custom shapes) over the live feed instead of simple rectangles:
 
 ```json
 {
@@ -298,8 +299,9 @@ Point-in-polygon tests are performed using `cv2.pointPolygonTest`.
 
 | Condition | Alert Level |
 |---|---|
-| Worker enters a Danger Zone (regardless of PPE) | CRITICAL |
+| Worker in a Danger Zone AND missing PPE | CRITICAL |
 | Worker in a Warning Zone AND missing PPE | CRITICAL |
+| Worker in a Danger Zone AND wearing all PPE | WARNING |
 | Worker in a Warning Zone AND wearing all PPE | WARNING |
 | Worker outside warning/danger zones AND missing PPE | WARNING |
 | Worker outside warning/danger zones AND wearing all PPE | NORMAL |
