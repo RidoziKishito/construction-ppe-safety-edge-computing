@@ -74,6 +74,9 @@ A critical engineering contribution is the zone-aware risk classification mechan
 
 The end-to-end pipeline operates in three decoupled layers on the edge node:
 
+![Trinity Edge Safety Pipeline Workflow](docs/workflow.png)
+*Figure 1: Trinity Edge Safety Pipeline — End-to-end inference, dual-anchor zone verification, temporal smoothing, and multi-tier alert dispatch.*
+
 ```
 +-------------------------------------------------------------------------+
 |                              INPUT SOURCE                               |
@@ -290,6 +293,9 @@ construction-ppe-safety-edge-computing/
 ---
 
 ## AI Model and Ablation Study
+
+![YOLO26n Model Architecture and Edge Optimization Methodology](docs/methodology.png)
+*Figure 2: YOLO26n Model Architecture and Edge Optimization Methodology across Model Architecture, Edge Optimization, and Edge Deployment phases.*
 
 ### Model Ablations
 
