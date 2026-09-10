@@ -45,9 +45,9 @@ This file summarises all AI and edge optimisation experiments conducted for the 
 
 | Variant | Params | GFLOPs | Val mAP@0.5 | Param reduction |
 |---------|--------|--------|-------------|-----------------|
-| Baseline | ~2.35 M | ~5.0 | **0.786** | — |
-| CBAM | ~2.31 M | ~5.2 | 0.656 | −1.7% |
-| GhostConv | **2.05 M** | **4.4** | 0.673 | **−12.7%** |
+| Baseline | ~2.35 M | ~5.0 | **0.677** | — |
+| CBAM | ~2.31 M | ~5.2 | 0.642 | −1.7% |
+| GhostConv | **2.05 M** | **4.4** | 0.629 | **−12.7%** |
 
 GhostConv reduces model size by 12.7% and GFLOPs by 12% but does not improve accuracy — baseline remains the deployment choice.
 
@@ -130,7 +130,7 @@ Scenario B (1 event/min, 500 B log + 15–30 KB snapshot) reduces upstream bandw
 
 | Dimension | Recommended choice | Key metric |
 |-----------|--------------------|------------|
-| Model variant | `baseline_yolo26n` | val mAP@0.5 = 0.786, 2.93 ms/img |
+| Model variant | `baseline_yolo26n` | val mAP@0.5 = 0.677, 2.93 ms/img |
 | Export format (GPU edge) | FP32 dynamic ONNX, B=8 | 131 FPS |
 | Export format (RAM-limited) | FP16 dynamic ONNX | 5.7 MB, same accuracy |
 | Alert smoothing | N = 5 consecutive frames | 94.6% FP reduction, 167 ms latency |

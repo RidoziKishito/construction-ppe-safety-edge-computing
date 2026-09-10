@@ -36,5 +36,17 @@ ai-model/outputs/ghost_*
 ai-model/*.onnx
 ai-model/*.pt
 ai-model/AGENTS.md
-ai-model/edge_optimization_plan.md
+# Media & Videos
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.webm
+edge-pipeline/media/videos/input/*
+!edge-pipeline/media/videos/input/.gitkeep
+edge-pipeline/media/videos/processed/*
+!edge-pipeline/media/videos/processed/.gitkeep
+
+# Logs & runs
 logs/
+edge-pipeline/logs/
