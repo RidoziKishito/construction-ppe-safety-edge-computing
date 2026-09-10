@@ -1,3 +1,5 @@
+# [DEPRECATED / REFERENCE ONLY]
+# Runtime automatically extracts class names directly from model.names in ONNX/PT model.
 helmet
 gloves
 vest

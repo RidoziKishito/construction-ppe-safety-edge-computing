@@ -31,7 +31,7 @@ ZONE_NAMES = {
     "Z02": "Warning Zone (Scaffolding)",
 }
 
-PPE_TYPES = ["no_helmet", "no_vest", "no_gloves", "no_boots", "no_goggle"]
+PPE_TYPES = ["no_helmet", "no_gloves", "no_boots", "no_goggle"]
 
 app = Flask(
     __name__,

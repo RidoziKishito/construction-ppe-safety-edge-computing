@@ -56,7 +56,7 @@ class EdgeLogger:
     ):
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
 
-        # Join zone list and violations into strings (e.g. "Z01|Z02", "no_helmet|no_vest")
+        # Join zone list and violations into strings (e.g. "Z01|Z02", "no_helmet|no_gloves")
         zone_str = "|".join([z["id"] for z in active_zones]) if active_zones else "None"
         viol_str = "|".join(violations) if violations else "None"
         bbox_str = f"[{bbox[0]}, {bbox[1]}, {bbox[2]}, {bbox[3]}]"

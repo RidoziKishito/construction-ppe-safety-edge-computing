@@ -76,6 +76,8 @@ GhostConv reduces model size by 12.7% and GFLOPs by 12% but does not improve acc
 - **FP16** saves 44% model size (5.7 MB vs 10.3 MB) with identical accuracy — recommended for RAM-constrained edge devices (Jetson Nano / Orin NX 8 GB).
 - **INT8 dynamic quantisation via ONNX Runtime is counter-productive on CUDA** — 30× slower than FP32. INT8 speedup requires TensorRT engine compilation, which is outside the scope of this phase.
 
+> **Evaluation Protocol Note (mAP 0.677 vs 0.749):** The 7-model ablation in Section 1 reported baseline mAP@0.5 = **0.677** evaluated against the extended 2,663-image stratified validation split (`split_val.py`) across all 11 classes. The ONNX benchmark above reports baseline FP32 mAP@0.5 = **0.749** evaluated on the original 143-image validation split (`data_modal.yaml`) specifically to measure relative precision loss across FP32, FP16, and INT8 formats against the PyTorch reference (0.7488). Both protocols validate consistent behavior within their respective evaluation scopes.
+
 ---
 
 ## 3. Temporal Smoothing for Alert Stability

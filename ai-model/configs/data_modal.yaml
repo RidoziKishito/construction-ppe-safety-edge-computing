@@ -6,9 +6,11 @@
 path: /dataset
 
 # Train/val/test splits (relative to path)
-train: images/train   # 30148 images
-val: images/val       # 143 images
-test: images/test     # 141 images
+# Baseline training dataset: 30,148 train images, 143 initial val images, 141 test images.
+# Note: For extended multi-model benchmarking, val was stratified to 2,663 images via split_val.py.
+train: images/train   # 30,148 images
+val: images/val       # 143 images (initial Roboflow split; 2,663 images in extended eval)
+test: images/test     # 141 images (initial Roboflow split)
 
 # Classes (11 total)
 names:

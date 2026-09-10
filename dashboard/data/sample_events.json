@@ -14,7 +14,7 @@
     "camera_id": "CAM-02",
     "zone": "Working at Height",
     "alert_level": "CRITICAL",
-    "missing_ppe": ["no_vest"],
+    "missing_ppe": ["no_goggle"],
     "confidence": 0.88,
     "frame_path": "logs/snapshots/demo_frame_0002.jpg",
     "worker_id_box": [214, 95, 402, 438]
@@ -64,7 +64,7 @@
     "camera_id": "CAM-01",
     "zone": "Ground Level General",
     "alert_level": "WARNING",
-    "missing_ppe": ["no_vest"],
+    "missing_ppe": ["no_goggle"],
     "confidence": 0.79,
     "frame_path": "logs/snapshots/demo_frame_0007.jpg",
     "worker_id_box": [92, 141, 281, 508]
@@ -94,7 +94,7 @@
     "camera_id": "CAM-02",
     "zone": "Working at Height",
     "alert_level": "CRITICAL",
-    "missing_ppe": ["no_vest"],
+    "missing_ppe": ["no_goggle"],
     "confidence": 0.86,
     "frame_path": "logs/snapshots/demo_frame_0010.jpg",
     "worker_id_box": [288, 74, 477, 416]
@@ -164,7 +164,7 @@
     "camera_id": "CAM-01",
     "zone": "Ground Level General",
     "alert_level": "WARNING",
-    "missing_ppe": ["no_vest"],
+    "missing_ppe": ["no_goggle"],
     "confidence": 0.78,
     "frame_path": "logs/snapshots/demo_frame_0017.jpg",
     "worker_id_box": [185, 130, 363, 505]
@@ -194,7 +194,7 @@
     "camera_id": "CAM-04",
     "zone": "Restricted Zone A",
     "alert_level": "CRITICAL",
-    "missing_ppe": ["no_vest"],
+    "missing_ppe": ["no_goggle"],
     "confidence": 0.85,
     "frame_path": "logs/snapshots/demo_frame_0020.jpg",
     "worker_id_box": [612, 91, 809, 462]
@@ -214,7 +214,7 @@
     "camera_id": "CAM-01",
     "zone": "Ground Level General",
     "alert_level": "WARNING",
-    "missing_ppe": ["no_vest"],
+    "missing_ppe": ["no_goggle"],
     "confidence": 0.77,
     "frame_path": "logs/snapshots/demo_frame_0022.jpg",
     "worker_id_box": [160, 121, 344, 492]
@@ -274,7 +274,7 @@
     "camera_id": "CAM-02",
     "zone": "Working at Height",
     "alert_level": "WARNING",
-    "missing_ppe": ["no_vest"],
+    "missing_ppe": ["no_goggle"],
     "confidence": 0.8,
     "frame_path": "logs/snapshots/demo_frame_0028.jpg",
     "worker_id_box": [262, 92, 450, 426]
@@ -294,7 +294,7 @@
     "camera_id": "CAM-04",
     "zone": "Machinery Area",
     "alert_level": "CRITICAL",
-    "missing_ppe": ["no_vest"],
+    "missing_ppe": ["no_goggle"],
     "confidence": 0.87,
     "frame_path": "logs/snapshots/demo_frame_0030.jpg",
     "worker_id_box": [738, 119, 944, 488]
@@ -324,7 +324,7 @@
     "camera_id": "CAM-03",
     "zone": "Ground Level General",
     "alert_level": "WARNING",
-    "missing_ppe": ["no_vest"],
+    "missing_ppe": ["no_goggle"],
     "confidence": 0.77,
     "frame_path": "logs/snapshots/demo_frame_0033.jpg",
     "worker_id_box": [398, 146, 579, 520]
@@ -374,7 +374,7 @@
     "camera_id": "CAM-03",
     "zone": "Ground Level General",
     "alert_level": "WARNING",
-    "missing_ppe": ["no_vest"],
+    "missing_ppe": ["no_goggle"],
     "confidence": 0.79,
     "frame_path": "logs/snapshots/demo_frame_0038.jpg",
     "worker_id_box": [456, 142, 641, 518]
@@ -394,7 +394,7 @@
     "camera_id": "CAM-04",
     "zone": "Restricted Zone A",
     "alert_level": "CRITICAL",
-    "missing_ppe": ["no_vest"],
+    "missing_ppe": ["no_goggle"],
     "confidence": 0.88,
     "frame_path": "logs/snapshots/demo_frame_0040.jpg",
     "worker_id_box": [688, 101, 894, 477]
@@ -434,7 +434,7 @@
     "camera_id": "CAM-01",
     "zone": "Ground Level General",
     "alert_level": "WARNING",
-    "missing_ppe": ["no_vest"],
+    "missing_ppe": ["no_goggle"],
     "confidence": 0.78,
     "frame_path": "logs/snapshots/demo_frame_0044.jpg",
     "worker_id_box": [166, 123, 348, 501]
@@ -484,7 +484,7 @@
     "camera_id": "CAM-02",
     "zone": "Working at Height",
     "alert_level": "CRITICAL",
-    "missing_ppe": ["no_vest"],
+    "missing_ppe": ["no_goggle"],
     "confidence": 0.87,
     "frame_path": "logs/snapshots/demo_frame_0049.jpg",
     "worker_id_box": [276, 86, 465, 423]

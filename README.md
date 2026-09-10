@@ -250,7 +250,7 @@ construction-ppe-safety-edge-computing/
 |
 +-- edge-pipeline/                          # Core edge execution runtime
 |   +-- configs/
-|   |   +-- ppe_classes.txt                 # Model class name mapping
+|   |   +-- ppe_classes.txt                 # Model class name mapping (legacy reference; runtime uses model.names)
 |   |   +-- zones/                          # Pre-configured video zone polygons
 |   |   |   +-- demo_video2.json
 |   |   |   +-- demo_video3.json
@@ -411,9 +411,9 @@ Benchmarks performed under ONNX Runtime 1.26.0 with CUDA Execution Provider:
 | FP16 dynamic | 4 | 5.7 MB | 9.05 | 110.4 | 0.750 | 0.671 | Recommended for Memory-Constrained Edge |
 | INT8 dynamic | 1 | 3.7 MB | 268.7 | 3.7 | 0.757 | 0.711 | Not Recommended (CUDA dynamic overhead) |
 
-Source data: `ai-model/outputs/edge_results/latency_quantization_summary.csv`
-
 Key takeaway: FP32 dynamic with batch size 8 achieves 131.4 FPS, providing sufficient computational headroom to simultaneously process four 30 FPS video streams on a single edge GPU.
+
+> **Evaluation Protocol Note (mAP 0.677 vs 0.749):** The 7-model architectural ablation study in Section "AI Model and Ablation Study" reported baseline mAP@0.5 = **0.677** evaluated against the extended 2,663-image stratified validation split (`split_val.py`) across all 11 classes (impacted by under-represented classes `none` and `no_boots`). The ONNX export and quantization benchmark above reported baseline FP32 mAP@0.5 = **0.749** evaluated on the original 143-image validation split (`data_modal.yaml`) specifically to measure relative precision retention across FP32, FP16, and INT8 formats against the PyTorch reference (0.7488). Both protocols validate consistent performance within their respective evaluation scopes.
 
 ### Temporal Smoothing Stability
 

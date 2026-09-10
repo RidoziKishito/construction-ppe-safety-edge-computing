@@ -27,14 +27,14 @@ def get_person_zones(person_center, zones_config):
 def check_ppe_violation(person_box, all_detections):
     """
     Check whether this person is missing required PPE.
-    Approach: scan detections of types like 'no_helmet', 'no_vest', etc.
+    Approach: scan detections of types like 'no_helmet', 'no_goggle', 'no_gloves', 'no_boots'.
     If the center of such detection lies inside the person's bbox -> count as violation.
     """
     px1, py1, px2, py2 = person_box
     violations = []
 
-    # List of violation classes according to dataset v3.3
-    violation_classes = ["no_helmet", "no_vest", "no_gloves", "no_boots", "no_goggle"]
+    # List of explicit violation classes from model taxonomy (11 classes total)
+    violation_classes = ["no_helmet", "no_gloves", "no_boots", "no_goggle"]
 
     for det in all_detections:
         cls_name = det["class_name"]

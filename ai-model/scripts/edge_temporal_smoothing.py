@@ -203,7 +203,6 @@ def frame_alerts_from_detections(persons, other_detections, zones_config, rule_e
         "no_goggle",
         "no_gloves",
         "no_boots",
-        "no_vest",
         "none",
     }
 
